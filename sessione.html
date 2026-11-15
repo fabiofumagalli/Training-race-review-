@@ -30,7 +30,13 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
 .tab.add{font:600 15px/1 var(--txt);color:var(--wind);border-style:dashed}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
 .card h2{font:600 18px/1 var(--num);margin:0;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.start{background:var(--fg);color:var(--bg);border:0;min-height:76px;border-radius:16px;font:600 28px/1 var(--num);letter-spacing:.06em;width:100%}
+.seq{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.start{background:var(--fg);color:var(--bg);border:0;min-height:84px;border-radius:16px;font:600 30px/1 var(--num);letter-spacing:.04em;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.start small{font:600 12px/1 var(--txt);letter-spacing:.06em;text-transform:uppercase;opacity:.75}
+.cd{text-align:center;font:600 54px/1 var(--num);font-variant-numeric:tabular-nums;padding:6px 0}
+.cd small{display:block;font:600 12px/1.3 var(--txt);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.start[aria-pressed="true"]{outline:3px solid var(--wind);outline-offset:2px}
+.cd.go{color:var(--good)}.cd[hidden]{display:none}
 .start:active{transform:scale(.99)}
 .gunrow{display:flex;gap:8px;align-items:center}
 .gunrow input{font:600 22px/1 var(--num);font-variant-numeric:tabular-nums;flex:1}
@@ -98,12 +104,16 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
 
   <div class="card">
     <h2><span id="rTitle">Regata 1</span><span class="k" id="rSub"></span></h2>
-    <button class="start" id="startBtn">START ORA</button>
+    <div class="seq">
+      <button class="start" data-seq="3"><small>Segnale</small>−3:00</button>
+      <button class="start" data-seq="2"><small>Segnale</small>−2:00</button>
+    </div>
+    <div class="cd" id="cd" role="timer" aria-live="off" hidden></div>
     <div class="gunrow">
       <input type="time" step="1" id="gun" aria-label="Ora dello start">
       <button id="gunClear" aria-label="Cancella ora dello start">Cancella</button>
     </div>
-    <div class="note">Premi START al segnale: salva l'ora al secondo. Se l'hai perso, scrivi l'ora qui sopra.</div>
+    <div class="note">Premi −3:00 o −2:00 nel momento in cui dai il segnale: lo start è esattamente 3 o 2 minuti dopo. Se l'hai perso, scrivi l'ora dello start qui sopra.</div>
   </div>
 
   <div class="card">
@@ -162,7 +172,7 @@ let day=todayRome();
 let S=null, cur=0;
 
 function blank(d){return {day:d,updatedAt:0,races:[newRace(1,null)],log:[]};}
-function newRace(n,prev){return {n,gun:'',pin:prev?prev.pin:null,cmt:prev?prev.cmt:null,reach:prev?prev.reach:null,wind:prev?prev.wind:null,windTo:prev?prev.windTo:null,note:''};}
+function newRace(n,prev){return {n,gun:'',signal:'',seq:prev?prev.seq||null:null,pin:prev?prev.pin:null,cmt:prev?prev.cmt:null,reach:prev?prev.reach:null,wind:prev?prev.wind:null,windTo:prev?prev.windTo:null,note:''};}
 function loadLocal(d){const v=ls.get('sess-'+d);return v&&v.races?v:blank(d);}
 
 /* ---------- coordinate parsing ---------- */
@@ -292,7 +302,9 @@ function render(){
   S.races.forEach((x,i)=>{const b=document.createElement('button');b.className='tab';b.textContent='R'+x.n;b.setAttribute('aria-pressed',i===cur);b.setAttribute('aria-label','Regata '+x.n);b.onclick=()=>{cur=i;render();};tabs.appendChild(b);});
   const add=document.createElement('button');add.className='tab add';add.textContent='+ Regata';add.onclick=()=>{const p=S.races[S.races.length-1];S.races.push(newRace(p.n+1,p));cur=S.races.length-1;logIt('nuova regata (posizioni e vento copiati da R'+p.n+')');changed();toast('Regata '+(p.n+1)+' pronta');setTimeout(()=>tabs.lastChild.previousSibling.scrollIntoView({inline:'end',block:'nearest'}),0);};tabs.appendChild(add);
   $('rTitle').textContent='Regata '+r.n;
-  $('rSub').textContent=r.gun?'start '+r.gun:'start non registrato';
+  $('rSub').textContent=r.gun?'start '+r.gun+(r.seq?' · sequenza '+r.seq+' min':''):'start non registrato';
+  document.querySelectorAll('.start').forEach(b=>b.setAttribute('aria-pressed',r.signal&&+b.dataset.seq===r.seq?'true':'false'));
+  tickCd();
   $('gun').value=r.gun||'';
   // marks
   const M=$('marks');M.innerHTML='';
@@ -338,9 +350,19 @@ function render(){
 }
 
 /* ---------- controls ---------- */
-$('startBtn').onclick=()=>{const r=race(),t=clock(new Date());const had=r.gun;r.gun=t;logIt('START '+t+(had?' (prima '+had+')':''));changed();toast('Start R'+r.n+' · '+t);if(navigator.vibrate)try{navigator.vibrate(80);}catch(e){}};
-$('gun').addEventListener('change',e=>{const v=e.target.value;const r=race();if(!v){return;}const t=v.length===5?v+':00':v;if(t===r.gun)return;r.gun=t;logIt('ora start corretta a mano: '+t);changed();});
-$('gunClear').onclick=()=>{const r=race();if(!r.gun)return;logIt('ora start cancellata ('+r.gun+')');r.gun='';changed();};
+document.querySelectorAll('.start').forEach(b=>b.onclick=()=>{const r=race(),seq=+b.dataset.seq,now=new Date();
+  const sig=clock(now),gun=clock(new Date(now.getTime()+seq*60000));const had=r.gun;
+  r.signal=sig;r.seq=seq;r.gun=gun;r.gunAt=now.getTime()+seq*60000;
+  logIt('segnale −'+seq+':00 alle '+sig+' → start '+gun+(had?' (prima '+had+')':''));changed();toast('R'+r.n+' · start alle '+gun);
+  if(navigator.vibrate)try{navigator.vibrate(80);}catch(e){}});
+function tickCd(){const r=race(),el=$('cd');if(!r.gunAt||!r.signal){el.hidden=true;return;}
+  const left=(r.gunAt-Date.now())/1000;if(left<-90){el.hidden=true;return;}
+  el.hidden=false;el.classList.toggle('go',left<=0);
+  const a=Math.abs(left),m=Math.floor(a/60),sec=Math.floor(a%60);
+  el.innerHTML=(left>0?'−':'+')+m+':'+String(sec).padStart(2,'0')+'<small>'+(left>0?'allo start di R'+r.n:'dallo start di R'+r.n)+'</small>';}
+setInterval(tickCd,250);
+$('gun').addEventListener('change',e=>{const v=e.target.value;const r=race();if(!v){return;}const t=v.length===5?v+':00':v;if(t===r.gun)return;r.gun=t;r.gunAt=null;logIt('ora start corretta a mano: '+t);changed();});
+$('gunClear').onclick=()=>{const r=race();if(!r.gun)return;logIt('ora start cancellata ('+r.gun+')');r.gun='';r.signal='';r.gunAt=null;changed();};
 document.querySelectorAll('.wind button').forEach(b=>b.onclick=()=>{const r=race();const d=+b.dataset.w;r.wind=r.wind==null?(d>0?60:60):((r.wind+d)%360+360)%360;scheduleWindLog();changed();});
 let wl=null;function scheduleWindLog(){clearTimeout(wl);const r=race(),n=r.n;wl=setTimeout(()=>{const x=S.races.find(q=>q.n===n);if(!x)return;S.log.push({t:clock(new Date()),r:n,txt:'vento '+x.wind+'°'+(x.windTo!=null?'–'+x.windTo+'°':'')});changed();},1500);}
 $('oscOn').onchange=e=>{const r=race();r.windTo=e.target.checked?(r.wind!=null?(r.wind+10)%360:70):null;if(r.wind==null&&e.target.checked)r.wind=60;scheduleWindLog();changed();};
@@ -350,7 +372,7 @@ $('day').addEventListener('change',e=>{const v=e.target.value;if(!/^\d{4}-\d{2}-
 $('delRace').onclick=function(){const b=this;if(S.races.length<2)return;if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='Tocca ancora per eliminare R'+race().n;setTimeout(()=>{b.dataset.arm='';b.textContent='Elimina regata';},3000);return;}
   b.dataset.arm='';b.textContent='Elimina regata';const n=race().n;S.races.splice(cur,1);cur=Math.max(0,cur-1);S.log.push({t:clock(new Date()),r:n,txt:'regata eliminata'});changed();};
 function summary(){const f=p=>p?p.lat.toFixed(6)+','+p.lon.toFixed(6)+(p.acc?' ±'+Math.round(p.acc)+'m':'')+(p.ok?' verificato':''):'?';
-  return ['Sessione '+S.day+' · Imperia'].concat(S.races.map(r=>`R${r.n} start ${r.gun||'?'} · vento ${r.wind??'?'}${r.windTo!=null?'-'+r.windTo:''} · pin ${f(r.pin)} · comitato ${f(r.cmt)} · boa 1 ${f(r.reach)}${r.note?' · '+r.note:''}`)).concat(['','Registro:'],S.log.map(e=>e.t+' R'+e.r+' '+e.txt)).join('\n');}
+  return ['Sessione '+S.day+' · Imperia'].concat(S.races.map(r=>`R${r.n} start ${r.gun||'?'}${r.seq?' (sequenza '+r.seq+' min, segnale '+(r.signal||'?')+')':''} · vento ${r.wind??'?'}${r.windTo!=null?'-'+r.windTo:''} · pin ${f(r.pin)} · comitato ${f(r.cmt)} · boa 1 ${f(r.reach)}${r.note?' · '+r.note:''}`)).concat(['','Registro:'],S.log.map(e=>e.t+' R'+e.r+' '+e.txt)).join('\n');}
 $('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.writeText(t);toast('Riepilogo copiato');}catch(e){const a=$('copyArea');a.value=t;a.style.display='block';a.focus();a.select();toast('Seleziona e copia il testo');}};
 
 /* ---------- boot ---------- */
