@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#0E2433">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Linea">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+<title>Linea · partenze</title>
+<style>
+:root{
+  --bg:#F2F5F4;--panel:#FFFFFF;--fg:#0E2433;--muted:#4A5A66;--line:#C9D6D3;--water:#E1EBE8;
+  --pin:#C4561A;--cmt:#0F7066;--wind:#2A64A3;--mark:#6A4C9C;--bad:#B42318;--good:#2B7A3D;--me:#0E2433;
+}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#07131B;--panel:#0F2230;--fg:#EAF2F6;--muted:#9BB2C1;--line:#24414F;--water:#0B1B26;
+  --pin:#FF8A3D;--cmt:#3FC1AE;--wind:#6FAEF0;--mark:#B99BF0;--bad:#FF6B6B;--good:#5BD07A;--me:#FFFFFF;color-scheme:dark}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.35 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{padding:env(safe-area-inset-top) max(12px,env(safe-area-inset-right)) calc(76px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+button{font:inherit;color:inherit;border:0;border-radius:12px;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--wind);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+.top{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 2px;font-size:13px;color:var(--muted)}
+.top b{color:var(--fg)}
+.gpsdot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:6px;vertical-align:0}
+.gpsdot.ok{background:var(--good)}.gpsdot.mid{background:#D69E2E}
+.view{display:none;flex-direction:column;gap:10px}.view.on{display:flex}
+canvas{width:100%;aspect-ratio:1/0.85;background:var(--water);border-radius:14px;display:block;touch-action:none}
+.verdict{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.chip{font-weight:800;font-size:20px;padding:4px 12px;border-radius:9px;color:#fff;background:var(--muted);white-space:nowrap}
+.chip.pin{background:var(--pin)}.chip.cmt{background:var(--cmt)}.chip.even{background:var(--muted)}
+.verdict .s{font-size:13px;color:var(--muted)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.big{padding:14px 6px;font-weight:700;font-size:16px;color:#fff;min-height:64px;line-height:1.15}
+.big small{display:block;font-weight:500;font-size:11px;opacity:.92;margin-top:3px}
+.b-pin{background:var(--pin)}.b-cmt{background:var(--cmt)}.b-mark{background:var(--mark)}
+.b-ink{background:var(--fg);color:var(--bg)}.b-soft{background:var(--panel);border:1px solid var(--line);color:var(--fg)}
+.wind{display:flex;align-items:center;gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px}
+.wind .lab{font-size:12px;color:var(--muted);width:46px;line-height:1.1}
+.wind button{background:var(--bg);border:1px solid var(--line);min-width:46px;height:46px;font-weight:700}
+.wind .val{flex:1;text-align:center;font-size:30px;font-weight:800;color:var(--wind)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:0}
+.stat .k{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat .v{font-size:19px;font-weight:800}
+.stat .v.pin{color:var(--pin)}.stat .v.cmt{color:var(--cmt)}
+.rec{display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.rec .t{font-size:13px;color:var(--muted)}
+.rec button{padding:10px 14px;font-weight:700;background:var(--bg);border:1px solid var(--line)}
+.rec button.on{background:var(--bad);color:#fff;border-color:var(--bad)}
+.count{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top) + 6px) 12px 8px;background:var(--fg);color:var(--bg);display:flex;justify-content:space-between;align-items:center;z-index:5;font-weight:700}
+.count .c{font-size:30px;font-weight:900}
+.count button{background:var(--bg);color:var(--fg);padding:8px 12px}
+.count[hidden]{display:none}
+body.counting{padding-top:calc(env(safe-area-inset-top) + 62px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:grid;grid-template-columns:repeat(4,1fr);background:var(--panel);border-top:1px solid var(--line);padding:6px max(8px,env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));z-index:4}
+.tabs button{background:none;padding:10px 4px;font-weight:700;color:var(--muted);border-radius:10px}
+.tabs button[aria-selected="true"]{color:var(--fg);background:var(--bg)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.card h2{margin:0;font-size:17px}
+.note{font-size:12.5px;color:var(--muted);line-height:1.45}
+.log{display:flex;flex-direction:column;gap:6px}
+.ev{display:grid;grid-template-columns:62px 1fr;gap:8px;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--line)}
+.ev:last-child{border-bottom:0}
+.ev .tm{color:var(--muted);font-variant-numeric:tabular-nums}
+.ev b.pin{color:var(--pin)}.ev b.cmt{color:var(--cmt)}.ev b.mark{color:var(--mark)}.ev b.wind{color:var(--wind)}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{padding:10px;font-weight:700;background:none;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.row input,.row select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--fg);min-width:0}
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;z-index:10}
+.sheet[hidden]{display:none}
+.sheet .in{background:var(--panel);width:100%;border-radius:18px 18px 0 0;padding:16px max(16px,env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;flex-direction:column;gap:10px;max-width:640px;margin:0 auto}
+.sheet h3{margin:0;font-size:20px}
+.meter{height:12px;background:var(--bg);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.meter div{height:100%;background:var(--good);width:0;transition:width .3s}
+.fixstat{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.ok{color:var(--good)}.warn{color:#B7791F}.bad{color:var(--bad)}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));background:var(--fg);color:var(--bg);padding:10px 14px;border-radius:12px;font-weight:600;z-index:20;max-width:92vw;text-align:center}
+.toast[hidden]{display:none}
+.rtabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.rtabs button{flex:none;padding:8px 12px;font-weight:700;background:var(--panel);border:1px solid var(--line)}
+.rtabs button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.scrub{display:flex;align-items:center;gap:8px}
+.scrub input{flex:1;accent-color:var(--wind)}
+.scrub .t{font-weight:800;font-size:20px;min-width:62px;font-variant-numeric:tabular-nums}
+.scrub button{padding:10px 12px;background:var(--panel);border:1px solid var(--line);font-weight:700;min-width:44px}
+.rt{display:flex;align-items:center;gap:8px;font-size:14px;padding:4px 0}
+.rt .dot{width:12px;height:12px;border-radius:50%;flex:none}
+.rt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rt button{padding:6px 10px;font-size:12px;background:var(--bg);border:1px solid var(--line)}
+.tbl{overflow-x:auto}
+.tbl table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{padding:7px 6px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+.tbl th{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+label.file{display:block;text-align:center;padding:12px;border-radius:12px;background:var(--fg);color:var(--bg);font-weight:700;cursor:pointer}
+label.file input{position:absolute;opacity:0;width:1px;height:1px}
+@media (min-width:760px){.wrapcols{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;align-items:start}}
+</style>
+</head>
+<body>
+<div class="count" id="count" hidden><span>Start tra</span><span class="c num" id="countV">3:00</span><button id="countX">Annulla</button></div>
+
+<div class="top"><span><span class="gpsdot" id="gpsDot"></span><span id="gpsTxt">GPS: in attesa</span></span><span class="num" id="clock"></span></div>
+
+<!-- CAMPO -->
+<section class="view on" id="v-campo">
+ <div class="wrapcols">
+  <div style="display:flex;flex-direction:column;gap:10px">
+   <canvas id="cv" aria-label="Schema del campo con il vento in alto"></canvas>
+   <div class="verdict"><span class="chip" id="vChip">—</span><span><b id="vMain">Registra pin e comitato</b><br><span class="s" id="vSub">e imposta il vento</span></span></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+   <div class="wind"><span class="lab">Vento da</span><button data-w="-5">−5</button><button data-w="-1">−1</button><span class="val num" id="windV">—</span><button data-w="1">+1</button><button data-w="5">+5</button></div>
+   <div class="grid3">
+    <button class="big b-pin" data-fix="pin">Pin<small id="sPin">da registrare</small></button>
+    <button class="big b-cmt" data-fix="cmt">Comitato<small id="sCmt">da registrare</small></button>
+    <button class="big b-mark" data-fix="mark"><span id="markName">Boa lasco</span><small id="sMark">da registrare</small></button>
+   </div>
+   <div class="grid2">
+    <button class="big b-ink" id="procBtn">Procedura 3′<small>start fra 3 minuti</small></button>
+    <button class="big b-soft" id="startBtn">Start adesso<small>segna l’ora esatta</small></button>
+   </div>
+   <div class="stats" id="stats"></div>
+   <div class="rec"><span><b>Traccia comitato</b><br><span class="t" id="recTxt">spenta</span></span><button id="recBtn">Registra</button></div>
+  </div>
+ </div>
+</section>
+
+<!-- REGISTRO -->
+<section class="view" id="v-log">
+ <div class="card"><h2 id="dayTitle">Registro</h2><div class="note" id="daySum"></div>
+  <div class="grid2"><button class="big b-ink" id="shareBtn">Esporta dati<small>GPX + JSON da mandare</small></button><button class="big b-soft" id="copyBtn">Copia riepilogo<small>testo per la chat</small></button></div>
+ </div>
+ <div class="card"><div class="log" id="log"></div></div>
+</section>
+
+<!-- IMPOSTAZIONI -->
+<!-- REPLAY -->
+<section class="view" id="v-replay">
+ <div class="rtabs" id="rRaces"></div>
+ <div class="note" id="rInfo"></div>
+ <canvas id="rcv" aria-label="Replay della partenza con il vento in alto"></canvas>
+ <div class="scrub"><button id="rPlay" aria-label="Riproduci">▶</button><span class="t" id="rRel">−0:30</span><input type="range" id="rScrub" min="-90" max="150" step="1" value="-30" aria-label="Tempo rispetto allo start"><button id="rSpd">4×</button></div>
+ <div class="row"><button class="b-soft" id="rViewStart" style="padding:8px 12px">Partenza</button><button class="b-soft" id="rViewLeg" style="padding:8px 12px">Tutto il lato</button></div>
+ <div class="card"><h2>Risultati della partenza</h2><div class="tbl"><table><thead id="rHead"></thead><tbody id="rRes"></tbody></table></div><div class="note" id="rNote"></div></div>
+ <div class="card"><h2>Tracce dei ragazzi</h2><div id="rTracks"></div>
+  <label class="file">Carica tracce GPX / TCX<input type="file" id="rFile" accept=".gpx,.tcx,.xml,application/gpx+xml" multiple></label>
+  <div class="note" id="rMsg">Le tracce restano su questo telefono, legate alla giornata scelta.</div></div>
+</section>
+
+<section class="view" id="v-set">
+ <div class="card"><h2>Tipo di partenza</h2>
+  <div class="seg" id="modeSeg"><button data-m="slalom">Slalom</button><button data-m="updown">Up and down</button></div>
+  <div class="note" id="modeNote"></div>
+ </div>
+ <div class="card"><h2>Calcoli</h2>
+  <div class="row"><label for="spd" style="flex:1">Velocità al traverso (nodi)</label><input id="spd" type="number" inputmode="decimal" min="5" max="45" step="1" style="width:90px"></div>
+  <div class="row"><label for="decl" style="flex:1">Declinazione magnetica (° Est)</label><input id="decl" type="number" inputmode="decimal" step="0.5" style="width:90px"></div>
+  <div class="note">La velocità serve solo alla simulazione slalom. La declinazione converte le rotte vere nelle letture della bussola (Imperia circa +3°).</div>
+ </div>
+ <div class="card"><h2>Giornate</h2>
+  <div class="row"><select id="daySel" style="flex:1" aria-label="Giornata"></select><button class="b-soft" id="newDay" style="padding:10px 12px">Nuova</button></div>
+  <div class="note">Ogni giornata ha il suo registro. Si salva sul telefono; esportala per mandarla.</div>
+  <button class="b-soft" id="delDay" style="padding:10px;color:var(--bad)">Cancella questa giornata</button>
+ </div>
+ <div class="card"><h2>Come funziona la registrazione dei punti</h2>
+  <div class="note">Stai fermo sul punto e premi il tasto. L’app raccoglie letture GPS nuove per qualche secondo, aspetta che la precisione scenda sotto i 5 m, scarta le peggiori e fa la media. Se le letture si spostano tutte nella stessa direzione (stai scarrocciando) usa l’ultima. Puoi salvare prima o rifare la misura.</div>
+ </div>
+</section>
+
+<nav class="tabs" role="tablist">
+ <button role="tab" aria-selected="true" data-v="campo">Campo</button>
+ <button role="tab" aria-selected="false" data-v="log">Registro</button>
+ <button role="tab" aria-selected="false" data-v="replay">Replay</button>
+ <button role="tab" aria-selected="false" data-v="set">Impost.</button>
+</nav>
+
+<div class="sheet" id="fix" hidden>
+ <div class="in">
+  <h3 id="fixTitle">Registro il pin</h3>
+  <div class="note" id="fixHint">Resta fermo sul punto.</div>
+  <div class="meter"><div id="fixBar"></div></div>
+  <div class="fixstat">
+   <div class="stat"><div class="k">Letture nuove</div><div class="v num" id="fN">0</div></div>
+   <div class="stat"><div class="k">Precisione</div><div class="v num" id="fA">—</div></div>
+   <div class="stat"><div class="k">Scarto</div><div class="v num" id="fS">—</div></div>
+  </div>
+  <div class="note" id="fixMsg"></div>
+  <div class="grid2"><button class="big b-soft" id="fixCancel">Annulla</button><button class="big b-ink" id="fixSave" disabled>Salva ora</button></div>
+ </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(()=>{'use strict';
+const $=id=>document.getElementById(id);
+/* ---------- storage ---------- */
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v)}catch(e){return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){toast('Memoria piena: esporta e cancella le giornate vecchie');return false}}};
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+let cfg=Object.assign({mode:'slalom',spd:20,decl:3,day:today()},LS.get('cfg',{}));
+const days=()=>LS.get('days',[]);
+function blank(){return {day:cfg.day,mode:cfg.mode,pts:{},wind:null,events:[],track:[],race:0}}
+let S=LS.get('day-'+cfg.day,null)||blank();
+function save(){LS.set('day-'+S.day,S);const d=days();if(!d.includes(S.day)){d.push(S.day);d.sort().reverse();LS.set('days',d)}}
+function saveCfg(){LS.set('cfg',cfg)}
+/* ---------- geo ---------- */
+const Rm=6371000,rad=d=>d*Math.PI/180,deg=r=>r*180/Math.PI;
+function enu(o,p){return {x:rad(p.lon-o.lon)*Rm*Math.cos(rad(o.lat)),y:rad(p.lat-o.lat)*Rm}}
+function dist(a,b){const v=enu(a,b);return Math.hypot(v.x,v.y)}
+function brg(a,b){const v=enu(a,b);return (deg(Math.atan2(v.x,v.y))+360)%360}
+function twa(c,w){return Math.abs(((c-w)%360+540)%360-180)}
+const POL=[[30,.55],[40,.70],[54,.82],[64,.88],[76,.95],[84,.98],[90,1],[97,1.014],[130,1.0],[180,.85]];
+function pol(a){for(let i=1;i<POL.length;i++){if(a<=POL[i][0]){const[a0,f0]=POL[i-1],[a1,f1]=POL[i];return f0+(f1-f0)*(a-a0)/(a1-a0)}}return .85}
+const f0=n=>String(Math.round(((n%360)+360)%360)).padStart(3,'0');
+const f1=n=>n.toFixed(1).replace('.',',');
+const hms=t=>new Date(t).toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+/* ---------- live gps ---------- */
+let me=null,lastFix=0,listeners=new Set();
+function startGPS(){if(!('geolocation' in navigator)){gpsMsg('GPS non disponibile in questo browser','');return}
+ navigator.geolocation.watchPosition(p=>{const c=p.coords;const fix={lat:c.latitude,lon:c.longitude,acc:c.accuracy,t:p.timestamp||Date.now(),sog:c.speed,cog:c.heading};
+  const fresh=!me||fix.t!==me.t||fix.lat!==me.lat||fix.lon!==me.lon;me=fix;lastFix=Date.now();
+  if(fresh){listeners.forEach(f=>f(fix));if(rec)addTrack(fix)}updTop();draw();},
+ e=>{gpsMsg(e.code===1?'Permesso GPS negato: abilitalo nelle impostazioni del browser':'GPS: '+e.message,'bad')},
+ {enableHighAccuracy:true,maximumAge:0,timeout:20000})}
+function gpsMsg(t,c){$('gpsTxt').textContent=t;$('gpsDot').className='gpsdot '+(c||'')}
+function updTop(){if(!me)return;const age=(Date.now()-lastFix)/1000;const a=me.acc;
+ gpsMsg(`GPS ±${Math.round(a)} m`+(me.sog!=null&&!isNaN(me.sog)?` · ${f1(me.sog*1.94384)} kn`:'')+(age>10?' · fermo da '+Math.round(age)+' s':''),a<=5&&age<10?'ok':a<=10&&age<10?'mid':'')}
+setInterval(()=>{$('clock').textContent=new Date().toLocaleTimeString('it-IT');updTop();tickCount()},250);
+/* ---------- precise fix ---------- */
+const NAMES={pin:'il pin',cmt:'il comitato',mark:'la boa'};
+let fixing=null;
+function openFix(kind){
+ const samples=[];const t0=Date.now();fixing={kind,samples,t0};
+ $('fixTitle').textContent='Registro '+NAMES[kind].replace('la boa',S.mode==='slalom'?'la boa di lasco':'la boa');
+ $('fixHint').textContent=kind==='cmt'?'Resta dove sei. Se la barca scarroccia lo vedo e uso l’ultima posizione.':'Resta a contatto con la boa finché la barra è piena.';
+ $('fixSave').disabled=true;$('fixMsg').textContent='';['fN','fA','fS'].forEach(i=>$(i).textContent='—');$('fixBar').style.width='0';
+ $('fix').hidden=false;
+ const on=fix=>{samples.push(fix);evalFix()};fixing.on=on;listeners.add(on);
+ if(me&&Date.now()-lastFix<1500)on(me);
+ fixing.timer=setInterval(evalFix,500);
+}
+function closeFix(){if(!fixing)return;listeners.delete(fixing.on);clearInterval(fixing.timer);fixing=null;$('fix').hidden=true}
+function solve(samples){
+ if(!samples.length)return null;
+ const best=Math.min(...samples.map(s=>s.acc));const lim=Math.max(5,best*1.5);
+ const good=samples.filter(s=>s.acc<=lim);
+ const o=good[0];const pts=good.map(s=>Object.assign(enu(o,s),{w:1/(s.acc*s.acc),s}));
+ let spread=0;for(const a of pts)for(const b of pts)spread=Math.max(spread,Math.hypot(a.x-b.x,a.y-b.y));
+ // drift: first vs last of good (time order), and consistency
+ let drift=0,dir=null;if(pts.length>=3){const a=pts[0],b=pts[pts.length-1];drift=Math.hypot(b.x-a.x,b.y-a.y);
+   const ux=(b.x-a.x)/(drift||1),uy=(b.y-a.y)/(drift||1);let mono=0;for(let i=1;i<pts.length;i++)mono+=((pts[i].x-pts[i-1].x)*ux+(pts[i].y-pts[i-1].y)*uy)>-0.3?1:0;
+   if(!(drift>2.5&&mono>=pts.length-2))drift=0;else dir=(deg(Math.atan2(ux,uy))+360)%360}
+ let lat,lon,acc,method;
+ if(drift){const l=good[good.length-1];lat=l.lat;lon=l.lon;acc=l.acc;method='ultima lettura (scarroccio '+f1(drift)+' m)'}
+ else{const W=pts.reduce((s,p)=>s+p.w,0);lat=pts.reduce((s,p)=>s+p.w*p.s.lat,0)/W;lon=pts.reduce((s,p)=>s+p.w*p.s.lon,0)/W;acc=Math.sqrt(1/W);method='media di '+good.length+' letture'}
+ return {lat,lon,acc,best,n:samples.length,used:good.length,spread,drift,dir,method,t:Date.now()};
+}
+function evalFix(){if(!fixing)return;const s=fixing.samples,r=solve(s),el=(Date.now()-fixing.t0)/1000;
+ $('fN').textContent=s.length;
+ if(!r){$('fixMsg').textContent=el>6?'Il GPS non manda letture nuove. Tieni il telefono all’aperto.':'Aspetto le letture…';$('fixBar').style.width=Math.min(100,el/30*100)+'%';return}
+ $('fA').textContent='±'+f1(r.best)+' m';$('fA').className='v num '+(r.best<=5?'ok':r.best<=8?'warn':'bad');
+ $('fS').textContent=r.used>1?f1(r.drift||r.spread)+' m':'—';
+ $('fixSave').disabled=false;
+ const goodN=s.filter(x=>x.acc<=5).length;const ready=goodN>=3&&el>=4;
+ $('fixBar').style.width=Math.min(100,(goodN/3)*100)+'%';
+ $('fixMsg').textContent=r.drift?`Ti stai spostando verso ${f0(r.dir)}°: uso l’ultima lettura.`:goodN<3?(r.best>8?'Precisione ancora scarsa, aspetta qualche secondo.':'Ancora un attimo…'):'Punto buono.';
+ if(ready){commitFix(r,'auto')}else if(el>30){commitFix(r,'timeout')}}
+function commitFix(r,how){const kind=fixing.kind;closeFix();
+ const prev=S.pts[kind];S.pts[kind]={lat:r.lat,lon:r.lon,acc:r.acc,best:r.best,n:r.n,used:r.used,spread:r.spread,drift:r.drift,method:r.method,t:r.t};
+ let msg=`${cap(label(kind))} registrato ±${f1(r.best)} m`;let extra='';
+ if(prev){const d=dist(prev,S.pts[kind]);extra=`spostato ${Math.round(d)} m a ${f0(brg(prev,S.pts[kind]))}°`;msg+=' · '+extra}
+ S.events.push({t:r.t,type:'point',kind,lat:r.lat,lon:r.lon,acc:r.best,used:r.used,n:r.n,spread:r.spread,drift:r.drift,how,moved:extra});
+ save();toast(msg+(how==='timeout'?' (precisione non raggiunta)':''));all();}
+const label=k=>k==='pin'?'pin':k==='cmt'?'comitato':(S.mode==='slalom'?'boa di lasco':'boa');
+const cap=s=>s[0].toUpperCase()+s.slice(1);
+/* ---------- wind ---------- */
+document.querySelectorAll('[data-w]').forEach(b=>b.onclick=()=>{S.wind=((S.wind??60)+Number(b.dataset.w)+360)%360;windDirty()});
+let windT=null;function windDirty(){all();clearTimeout(windT);windT=setTimeout(()=>{S.events.push({t:Date.now(),type:'wind',wind:S.wind});save();renderLog()},2500)}
+/* ---------- starts ---------- */
+let countTo=null,beeps=new Set(),actx=null;
+function beep(f,d){try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=f;o.connect(g);g.connect(actx.destination);g.gain.value=.25;o.start();o.stop(actx.currentTime+d)}catch(e){}}
+$('procBtn').onclick=()=>{try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume()}catch(e){}
+ const now=Date.now();countTo=Math.round((now+180000)/1000)*1000;beeps=new Set();
+ S.events.push({t:now,type:'proc',start:countTo});save();$('count').hidden=false;document.body.classList.add('counting');wake();renderLog();toast('Procedura avviata: start alle '+hms(countTo))};
+$('countX').onclick=()=>{S.events.push({t:Date.now(),type:'proc-cancel'});countTo=null;$('count').hidden=true;document.body.classList.remove('counting');save();renderLog()};
+function tickCount(){if(!countTo)return;const r=Math.ceil((countTo-Date.now())/1000);
+ $('countV').textContent=r>0?Math.floor(r/60)+':'+String(r%60).padStart(2,'0'):'VIA';
+ for(const s of [120,60,30,10,5,4,3,2,1])if(r===s&&!beeps.has(s)){beeps.add(s);beep(s<=5?880:660,s<=5?.12:.25)}
+ if(r<=0&&countTo){beep(1100,.6);recordStart(countTo,'procedura');countTo=null;setTimeout(()=>{$('count').hidden=true;document.body.classList.remove('counting')},1500)}}
+$('startBtn').onclick=()=>recordStart(Date.now(),'manuale');
+function recordStart(t,how){S.race=(S.race||0)+1;const snap=calc();S.events.push({t,type:'start',race:S.race,how,wind:S.wind,mode:S.mode,pts:JSON.parse(JSON.stringify(S.pts)),calc:snap&&snap.summary});save();toast(`Regata ${S.race}: start ${hms(t)}`);all()}
+/* ---------- committee track ---------- */
+let rec=false;
+function addTrack(f){if(f.acc>25)return;S.track.push([+f.lat.toFixed(6),+f.lon.toFixed(6),f.t,Math.round(f.acc)]);if(S.track.length%10===0)save();$('recTxt').textContent=`${S.track.length} punti · ${hms(f.t)}`}
+$('recBtn').onclick=()=>{rec=!rec;$('recBtn').classList.toggle('on',rec);$('recBtn').textContent=rec?'Ferma':'Registra';
+ $('recTxt').textContent=rec?'in registrazione · tieni lo schermo acceso':(S.track.length?S.track.length+' punti salvati':'spenta');
+ S.events.push({t:Date.now(),type:rec?'track-on':'track-off'});save();if(rec)wake();renderLog()};
+let lock=null;async function wake(){try{if('wakeLock' in navigator&&!lock){lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>lock=null)}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&(rec||countTo))wake()});
+/* ---------- calculations ---------- */
+function calc(){const P=S.pts.pin,C=S.pts.cmt,M=S.pts.mark,W=S.wind;if(!P||!C)return null;
+ const L=dist(P,C),bPC=brg(P,C);const r={L,bPC};
+ if(W!=null){const h=Math.cos(rad(bPC-W))*L; // projection of P->C onto direction toward wind source
+  r.h=h;r.bias=deg(Math.asin(Math.max(-1,Math.min(1,h/L))));}
+ if(M){r.dP=dist(P,M);r.dC=dist(C,M);r.bP=brg(P,M);r.bC=brg(C,M);
+  if(W!=null){r.aP=twa(r.bP,W);r.aC=twa(r.bC,W);const v=cfg.spd*0.514444;r.tP=r.dP/(v*pol(r.aP));r.tC=r.dC/(v*pol(r.aC))}}
+ const D=cfg.decl||0;r.magCP=(brg(C,P)-D+360)%360;if(M)r.magCM=(r.bC-D+360)%360;
+ let s='';
+ if(S.mode==='slalom'&&r.tP!=null){const d=r.tP-r.tC;r.fav=Math.abs(d)<1?'even':d<0?'pin':'cmt';r.adv=Math.abs(d);r.advM=Math.abs(d)*cfg.spd*0.514444;
+  s=`${r.fav==='even'?'Pari':r.fav==='pin'?'Pin favor':'Comitato favor'} ${f1(r.adv)} s · pin ${Math.round(r.aP)}° ${Math.round(r.dP)} m · comitato ${Math.round(r.aC)}° ${Math.round(r.dC)} m`}
+ else if(S.mode==='updown'&&r.h!=null){r.fav=Math.abs(r.bias)<2?'even':r.h>0?'cmt':'pin';r.adv=Math.abs(r.h);
+  s=`${r.fav==='even'?'Linea quadra':r.fav==='pin'?'Pin favor':'Comitato favor'} ${f1(Math.abs(r.bias))}° · ${Math.round(Math.abs(r.h))} m`}
+ r.summary=s+` · linea ${Math.round(L)} m`;return r}
+/* ---------- render ---------- */
+function all(){const r=calc();
+ $('windV').textContent=S.wind==null?'—':f0(S.wind)+'°';
+ $('markName').textContent=S.mode==='slalom'?'Boa lasco':'Boa bolina';
+ for(const [k,id] of [['pin','sPin'],['cmt','sCmt'],['mark','sMark']]){const p=S.pts[k];$(id).textContent=p?`±${f1(p.best||p.acc)} m · ${hms(p.t).slice(0,5)}`:'da registrare'}
+ const chip=$('vChip');chip.className='chip';
+ if(!r){chip.textContent='—';$('vMain').textContent=!S.pts.pin?'Registra il pin':'Registra il comitato';$('vSub').textContent='stando fermo sul punto'}
+ else if(S.wind==null){chip.textContent='—';$('vMain').textContent='Imposta il vento';$('vSub').textContent=`linea ${Math.round(r.L)} m`}
+ else if(S.mode==='slalom'&&r.tP==null){chip.textContent='—';$('vMain').textContent='Registra la boa di lasco';$('vSub').textContent=`linea ${Math.round(r.L)} m`}
+ else{chip.classList.add(r.fav);chip.textContent=r.fav==='even'?'PARI':r.fav==='pin'?'PIN':'COMITATO';
+  if(S.mode==='slalom'){$('vMain').textContent=r.fav==='even'?`Differenza ${f1(r.adv)} s`:`+${f1(r.adv)} s · circa ${Math.round(r.advM)} m`;$('vSub').textContent=`Pin ${Math.round(r.dP)} m a ${Math.round(r.aP)}° · Comitato ${Math.round(r.dC)} m a ${Math.round(r.aC)}°`}
+  else{$('vMain').textContent=r.fav==='even'?`Linea quadra (${f1(Math.abs(r.bias))}°)`:`${f1(Math.abs(r.bias))}° · ${Math.round(Math.abs(r.h))} m più sopravento`;$('vSub').textContent=`Linea quadra a ${f0(S.wind+90)}°/${f0(S.wind+270)}° · ora ${f0(r.bPC)}°`}}
+ const st=[];if(r){st.push(['Linea',Math.round(r.L)+' m','']);
+  if(S.mode==='slalom'&&r.aP!=null){st.push(['Angolo pin',Math.round(r.aP)+'°','pin'],['Angolo comitato',Math.round(r.aC)+'°','cmt'],['Pin → boa',Math.round(r.dP)+' m','pin'],['Comitato → boa',Math.round(r.dC)+' m','cmt'])}
+  if(S.mode==='updown'&&r.bias!=null){st.push(['Bias',f1(Math.abs(r.bias))+'°',''],['Vantaggio',Math.round(Math.abs(r.h))+' m',''])}
+  st.push(['Bussola → pin',f0(r.magCP)+'°','']);if(r.magCM!=null)st.push(['Bussola → boa',f0(r.magCM)+'°',''])}
+ if(me&&S.pts.pin)st.push(['Tu → pin',Math.round(dist(me,S.pts.pin))+' m','']);
+ $('stats').innerHTML=st.map(([k,v,c])=>`<div class="stat"><div class="k">${k}</div><div class="v num ${c}">${v}</div></div>`).join('');
+ renderLog();draw();}
+const cv=$('cv'),ctx=cv.getContext('2d');
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function draw(){const d=devicePixelRatio||1,W=cv.clientWidth*d,H=cv.clientHeight*d;if(!W)return;if(cv.width!==W||cv.height!==H){cv.width=W;cv.height=H}
+ ctx.clearRect(0,0,W,H);const pts=[S.pts.pin,S.pts.cmt,S.pts.mark,me].filter(Boolean);
+ const fg=css('--fg'),mu=css('--muted');ctx.font=`600 ${12*d}px system-ui`;
+ if(!pts.length){ctx.fillStyle=mu;ctx.textAlign='center';ctx.fillText('In attesa del GPS…',W/2,H/2);return}
+ const o=pts[0],rot=rad(S.wind??0);
+ const tr=p=>{const v=enu(o,p);return {x:v.x*Math.cos(rot)-v.y*Math.sin(rot),y:v.x*Math.sin(rot)+v.y*Math.cos(rot)}};
+ const q=pts.map(tr);const xs=q.map(p=>p.x),ys=q.map(p=>p.y);
+ const span=Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys),80);
+ const s=Math.min(W,H)*0.78/span,cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
+ const S2=p=>{const t=tr(p);return {x:W/2+(t.x-cx)*s,y:H/2-(t.y-cy)*s+8*d}};
+ // wind
+ ctx.save();ctx.translate(26*d,20*d);ctx.strokeStyle=css('--wind');ctx.fillStyle=css('--wind');ctx.lineWidth=3*d;
+ if(S.wind!=null){ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(0,30*d);ctx.stroke();ctx.beginPath();ctx.moveTo(0,40*d);ctx.lineTo(-7*d,26*d);ctx.lineTo(7*d,26*d);ctx.fill();ctx.textAlign='left';ctx.fillText('Vento '+f0(S.wind)+'°',12*d,14*d)}
+ ctx.restore();
+ // north
+ ctx.save();ctx.translate(W-22*d,24*d);ctx.rotate(-rot);ctx.fillStyle=mu;ctx.beginPath();ctx.moveTo(0,-11*d);ctx.lineTo(5*d,5*d);ctx.lineTo(-5*d,5*d);ctx.fill();ctx.restore();
+ // scale
+ const nice=[10,20,50,100,200,500].find(n=>n*s>W*.16)||500;ctx.strokeStyle=mu;ctx.lineWidth=2*d;ctx.beginPath();ctx.moveTo(12*d,H-12*d);ctx.lineTo(12*d+nice*s,H-12*d);ctx.stroke();ctx.fillStyle=mu;ctx.textAlign='left';ctx.fillText(nice+' m',12*d,H-18*d);
+ // committee track (last 15 min)
+ if(S.track.length>1){ctx.strokeStyle=css('--cmt');ctx.globalAlpha=.35;ctx.lineWidth=2*d;ctx.beginPath();let on=false;const lim=Date.now()-900000;
+  for(const t of S.track){if(t[2]<lim)continue;const p=S2({lat:t[0],lon:t[1]});on?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);on=true}ctx.stroke();ctx.globalAlpha=1}
+ const P=S.pts.pin&&S2(S.pts.pin),C=S.pts.cmt&&S2(S.pts.cmt),M=S.pts.mark&&S2(S.pts.mark);
+ if(M&&S.mode==='slalom'){ctx.setLineDash([6*d,6*d]);ctx.lineWidth=2*d;if(P){ctx.strokeStyle=css('--pin');ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(M.x,M.y);ctx.stroke()}
+  if(C){ctx.strokeStyle=css('--cmt');ctx.beginPath();ctx.moveTo(C.x,C.y);ctx.lineTo(M.x,M.y);ctx.stroke()}ctx.setLineDash([])}
+ if(P&&C){ctx.strokeStyle=fg;ctx.lineWidth=3*d;ctx.setLineDash([10*d,7*d]);ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(C.x,C.y);ctx.stroke();ctx.setLineDash([])}
+ const mk=(p,col,lab,sq)=>{if(!p)return;ctx.fillStyle=col;if(sq)ctx.fillRect(p.x-8*d,p.y-8*d,16*d,16*d);else{ctx.beginPath();ctx.arc(p.x,p.y,8*d,0,7);ctx.fill()}ctx.textAlign='center';ctx.font=`700 ${12*d}px system-ui`;ctx.fillText(lab,p.x,p.y+24*d)};
+ mk(P,css('--pin'),'Pin');mk(C,css('--cmt'),'Comitato',true);mk(M,css('--mark'),S.mode==='slalom'?'Lasco':'Boa');
+ if(me){const p=S2(me);ctx.strokeStyle=css('--me');ctx.globalAlpha=.3;ctx.lineWidth=1.5*d;ctx.beginPath();ctx.arc(p.x,p.y,Math.max(me.acc*s,8*d),0,7);ctx.stroke();ctx.globalAlpha=1;ctx.fillStyle=css('--me');ctx.beginPath();ctx.arc(p.x,p.y,5*d,0,7);ctx.fill()}}
+addEventListener('resize',draw);
+/* ---------- log ---------- */
+function evText(e){
+ if(e.type==='point')return `<b class="${e.kind}">${cap(label(e.kind))}</b> ${e.lat.toFixed(6)}, ${e.lon.toFixed(6)} · ±${f1(e.acc)} m · ${e.used}/${e.n} letture${e.drift?' · scarroccio '+f1(e.drift)+' m':''}${e.moved?' · '+e.moved:''}${e.how==='timeout'?' · <span class="warn">precisione non raggiunta</span>':''}`;
+ if(e.type==='wind')return `<b class="wind">Vento</b> ${f0(e.wind)}°`;
+ if(e.type==='start')return `<b>Start regata ${e.race}</b> (${e.how})${e.wind!=null?' · vento '+f0(e.wind)+'°':''}${e.calc?'<br>'+e.calc:''}`;
+ if(e.type==='proc')return `Procedura 3′ → start ${hms(e.start)}`;
+ if(e.type==='proc-cancel')return 'Procedura annullata';
+ if(e.type==='track-on')return 'Traccia comitato: inizio';if(e.type==='track-off')return 'Traccia comitato: fine';
+ if(e.type==='mode')return 'Tipo partenza: '+(e.mode==='slalom'?'slalom':'up and down');return e.type}
+function renderLog(){const ev=[...S.events].sort((a,b)=>b.t-a.t);
+ $('log').innerHTML=ev.length?ev.map(e=>`<div class="ev"><span class="tm">${hms(e.t)}</span><span>${evText(e)}</span></div>`).join(''):'<div class="note">Ancora niente. Registra boe, comitato, vento e start dal Campo.</div>';
+ const st=S.events.filter(e=>e.type==='start').length,pt=S.events.filter(e=>e.type==='point').length;
+ $('dayTitle').textContent='Registro · '+new Date(S.day+'T12:00').toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+ $('daySum').textContent=`${st} partenze · ${pt} punti · ${S.track.length} punti di traccia del comitato`}
+/* ---------- export ---------- */
+function gpx(){const esc=s=>String(s).replace(/[<&>]/g,c=>({'<':'&lt;','&':'&amp;','>':'&gt;'}[c]));
+ const w=S.events.filter(e=>e.type==='point').map(e=>`<wpt lat="${e.lat.toFixed(7)}" lon="${e.lon.toFixed(7)}"><time>${new Date(e.t).toISOString()}</time><name>${esc(label(e.kind))}</name><desc>±${f1(e.acc)} m</desc></wpt>`).join('\n');
+ const s=S.events.filter(e=>e.type==='start').map(e=>`<wpt lat="${(e.pts.cmt||e.pts.pin||{lat:0}).lat}" lon="${(e.pts.cmt||e.pts.pin||{lon:0}).lon}"><time>${new Date(e.t).toISOString()}</time><name>Start regata ${e.race}</name></wpt>`).join('\n');
+ const t=S.track.map(p=>`<trkpt lat="${p[0]}" lon="${p[1]}"><time>${new Date(p[2]).toISOString()}</time></trkpt>`).join('\n');
+ return `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Linea partenze" xmlns="http://www.topografix.com/GPX/1/1">\n${w}\n${s}\n<trk><name>Comitato ${S.day}</name><trkseg>\n${t}\n</trkseg></trk>\n</gpx>\n`}
+function summary(){const L=[`Allenamento partenze ${S.day} (${S.mode==='slalom'?'slalom':'up and down'})`];
+ for(const e of [...S.events].sort((a,b)=>a.t-b.t)){const t=hms(e.t);
+  if(e.type==='point')L.push(`${t} ${label(e.kind)}: ${e.lat.toFixed(6)}, ${e.lon.toFixed(6)} ±${f1(e.acc)} m${e.moved?' ('+e.moved+')':''}`);
+  else if(e.type==='wind')L.push(`${t} vento ${f0(e.wind)}°`);
+  else if(e.type==='start')L.push(`${t} START regata ${e.race}${e.calc?' — '+e.calc:''}`);
+  else if(e.type==='proc')L.push(`${t} procedura 3′ → start ${hms(e.start)}`)}
+ if(S.track.length)L.push(`Traccia comitato: ${S.track.length} punti (${hms(S.track[0][2])}–${hms(S.track[S.track.length-1][2])})`);return L.join('\n')}
+async function shareFiles(){const files=[new File([gpx()],`linea-${S.day}.gpx`,{type:'application/gpx+xml'}),new File([JSON.stringify(S)],`linea-${S.day}.json`,{type:'application/json'})];
+ try{if(navigator.canShare&&navigator.canShare({files})){await navigator.share({files,title:'Linea '+S.day,text:summary()});return}}catch(e){if(e.name==='AbortError')return}
+ for(const f of files){const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}toast('File scaricati')}
+$('shareBtn').onclick=shareFiles;
+$('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.writeText(t);toast('Riepilogo copiato: incollalo nella chat')}catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Riepilogo copiato')}catch(_){toast('Copia non riuscita')}ta.remove()}};
+/* ---------- settings ---------- */
+function renderSet(){document.querySelectorAll('#modeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===S.mode));
+ $('modeNote').textContent=S.mode==='slalom'?'Favorito = l’estremo che arriva prima alla boa di lasco, tenendo conto di distanza e angolo al vento.':'Favorito = l’estremo più sopravento. Conta l’angolo della linea rispetto al vento; la boa è facoltativa.';
+ $('spd').value=cfg.spd;$('decl').value=cfg.decl;
+ const d=days();if(!d.includes(S.day))d.unshift(S.day);$('daySel').innerHTML=d.map(x=>`<option value="${x}"${x===S.day?' selected':''}>${x}</option>`).join('')}
+document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{S.mode=cfg.mode=b.dataset.m;S.events.push({t:Date.now(),type:'mode',mode:S.mode});save();saveCfg();renderSet();all()});
+$('spd').onchange=()=>{const v=parseFloat($('spd').value);if(v>3&&v<60){cfg.spd=v;saveCfg();all()}};
+$('decl').onchange=()=>{const v=parseFloat(String($('decl').value).replace(',','.'));if(!isNaN(v)){cfg.decl=v;saveCfg();all()}};
+$('daySel').onchange=()=>{cfg.day=$('daySel').value;saveCfg();S=LS.get('day-'+cfg.day,null)||blank();loadRT();rRace=0;rcache.clear();renderSet();all()};
+$('newDay').onclick=()=>{cfg.day=today();const ex=LS.get('day-'+cfg.day,null);if(ex){S=ex;toast('La giornata di oggi esiste già: la riapro')}else{S=blank();save()}saveCfg();renderSet();all()};
+let delArm=0;$('delDay').onclick=()=>{if(Date.now()-delArm>4000){delArm=Date.now();toast('Tocca ancora per cancellare '+S.day);return}
+ try{localStorage.removeItem('day-'+S.day)}catch(e){}LS.set('days',days().filter(x=>x!==S.day));cfg.day=today();S=LS.get('day-'+cfg.day,null)||blank();saveCfg();renderSet();all();toast('Giornata cancellata')};
+/* ---------- tabs, fix sheet, toast ---------- */
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));
+ document.querySelectorAll('.view').forEach(v=>v.classList.toggle('on',v.id==='v-'+b.dataset.v));if(b.dataset.v==='set')renderSet();if(b.dataset.v==='replay'){renderReplay()}if(b.dataset.v==='campo')draw()});
+document.querySelectorAll('[data-fix]').forEach(b=>b.onclick=()=>{if(!('geolocation' in navigator)){toast('GPS non disponibile');return}openFix(b.dataset.fix)});
+$('fixCancel').onclick=closeFix;$('fixSave').onclick=()=>{if(!fixing)return;const r=solve(fixing.samples);if(r)commitFix(r,'manuale')};
+let toastT;function toast(m){const t=$('toast');t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,3500)}
+/* ---------- replay ---------- */
+const RCOL=['#2F6FDB','#D6338C','#C99A06','#1B9FC4','#8A5A2B','#5E9E1E','#7A3FD1','#D9480F'];
+let RT=[],rRace=0,rRel=-30,rPlay=false,rSpeed=4,rView='start',rLast=0;
+function loadRT(){RT=LS.get('trk-'+S.day,[]).map(t=>prepTrack(t));}
+function saveRT(){LS.set('trk-'+S.day,RT.map(t=>({id:t.id,name:t.name,color:t.color,p:t.p})))}
+function prepTrack(t){const spd=new Float32Array(t.p.length);for(let i=0;i<t.p.length;i++){let a=i,b=i;while(a>0&&t.p[i][2]-t.p[a-1][2]<=3000)a--;while(b<t.p.length-1&&t.p[b+1][2]-t.p[i][2]<=3000)b++;
+  let d=0;for(let j=a;j<b;j++)d+=dist({lat:t.p[j][0],lon:t.p[j][1]},{lat:t.p[j+1][0],lon:t.p[j+1][1]});const dt=(t.p[b][2]-t.p[a][2])/1000;spd[i]=dt>0?d/dt:0}
+ return Object.assign({},t,{spd,vis:true})}
+function parseTrack(txt,fname){const doc=new DOMParser().parseFromString(txt,'application/xml');if(doc.getElementsByTagName('parsererror').length)throw new Error('file non leggibile');
+ const all=(el,tag)=>Array.from(el.getElementsByTagNameNS('*',tag));let p=[];
+ const g=all(doc,'trkpt');if(g.length)g.forEach(e=>{const tm=all(e,'time')[0];p.push([+e.getAttribute('lat'),+e.getAttribute('lon'),tm?Date.parse(tm.textContent.trim()):NaN])});
+ else all(doc,'Trackpoint').forEach(e=>{const la=all(e,'LatitudeDegrees')[0],lo=all(e,'LongitudeDegrees')[0],tm=all(e,'Time')[0];if(la&&lo)p.push([+la.textContent,+lo.textContent,tm?Date.parse(tm.textContent.trim()):NaN])});
+ p=p.filter(x=>isFinite(x[0])&&isFinite(x[1])&&isFinite(x[2])).sort((a,b)=>a[2]-b[2]);if(p.length<10)throw new Error('nessun punto con orario');
+ const st=S.events.filter(e=>e.type==='start').map(e=>e.t);if(st.length){const a=Math.min(...st)-900000,b=Math.max(...st)+1200000;const q=p.filter(x=>x[2]>=a&&x[2]<=b);if(q.length>50)p=q}
+ const out=[];let last=-1e15;for(const x of p){if(x[2]-last>=1000){out.push([+x[0].toFixed(6),+x[1].toFixed(6),x[2]]);last=x[2]}}
+ return {id:'k'+Date.now()+Math.random().toString(36).slice(2,5),name:fname.replace(/\.(gpx|tcx|xml)$/i,''),color:RCOL[RT.length%RCOL.length],p:out}}
+$('rFile').onchange=async e=>{const fs=[...e.target.files];e.target.value='';const msg=[];
+ for(const f of fs){try{RT.push(prepTrack(parseTrack(await f.text(),f.name)))}catch(err){msg.push(f.name+': '+err.message)}}
+ saveRT();rcache.clear();$('rMsg').textContent=(fs.length-msg.length)+' tracce caricate.'+(msg.length?' Non caricate: '+msg.join('; '):'');renderReplay()};
+function races(){return S.events.filter(e=>e.type==='start').sort((a,b)=>a.t-b.t)}
+function rPosAt(t,time){const p=t.p;if(!p.length||time<p[0][2]||time>p[p.length-1][2])return null;let lo=0,hi=p.length-1;while(hi-lo>1){const m=(lo+hi)>>1;if(p[m][2]<=time)lo=m;else hi=m}
+ const a=p[lo],b=p[hi];if(b[2]-a[2]>20000)return null;const f=b[2]===a[2]?0:(time-a[2])/(b[2]-a[2]);return {lat:a[0]+(b[0]-a[0])*f,lon:a[1]+(b[1]-a[1])*f,v:t.spd[lo]+(t.spd[hi]-t.spd[lo])*f}}
+const cmtTrack=()=>({p:S.track,spd:new Float32Array(S.track.length)});
+function cmtAt(race,time){if(S.track.length){const c=rPosAt(cmtTrack(),time);if(c)return c}return race.pts.cmt||null}
+const rcache=new Map();
+function analyze(t,race){const k=t.id+'|'+race.t;if(rcache.has(k))return rcache.get(k);const g=race.t,P=race.pts.pin,M=race.pts.mark,W=race.wind;const res={};
+ if(!P){rcache.set(k,res);return res}
+ const p=t.p;const o=P;
+ for(let i=0;i<p.length-1;i++){if(p[i+1][2]<g-60000)continue;if(p[i][2]>g+180000)break;
+  const C=cmtAt(race,p[i][2]);if(!C)break;const Cv=enu(o,C),A=enu(o,{lat:p[i][0],lon:p[i][1]}),B=enu(o,{lat:p[i+1][0],lon:p[i+1][1]});
+  const Mv=M?enu(o,M):(W!=null?{x:Math.sin(rad(W))*500,y:Math.cos(rad(W))*500}:null);if(!Mv)break;
+  const cr=(u,q)=>u.x*q.y-u.y*q.x;const sg=Math.sign(cr(Cv,Mv));const s0=cr(Cv,A)*sg,s1=cr(Cv,B)*sg;if(!(s0<0&&s1>=0))continue;
+  const f=s0/(s0-s1);const X={x:A.x+(B.x-A.x)*f,y:A.y+(B.y-A.y)*f};const L2=Cv.x*Cv.x+Cv.y*Cv.y;const u=(X.x*Cv.x+X.y*Cv.y)/L2;if(u<-0.15||u>1.15)continue;
+  res.cross=(p[i][2]+(p[i+1][2]-p[i][2])*f-g)/1000;res.u=u;res.v=t.spd[i]*1.94384;res.ct=g+res.cross*1000;
+  // favoured end at crossing time
+  const L=Math.sqrt(L2),bPC=(deg(Math.atan2(Cv.x,Cv.y))+360)%360;
+  if(race.mode==='updown'&&W!=null){const h=Math.cos(rad(bPC-W))*L;res.fav=Math.abs(deg(Math.asin(Math.max(-1,Math.min(1,h/L)))))<2?'even':h>0?'cmt':'pin'}
+  else if(M&&W!=null){const Cp=cmtAt(race,res.ct);const v=cfg.spd*.514444;const tp=dist(P,M)/(v*pol(twa(brg(P,M),W))),tc=dist(Cp,M)/(v*pol(twa(brg(Cp,M),W)));res.fav=Math.abs(tp-tc)<1?'even':tp<tc?'pin':'cmt'}
+  res.side=u<.4?'pin':u>.6?'cmt':'centro';res.good=(res.fav==='even'||res.side==='centro')?null:(res.fav===res.side);break}
+ if(res.cross!=null){const t0=res.ct;
+  if(race.mode!=='updown'&&M){let best=1e9,bt=null,hit=false;for(const q of p){if(q[2]<t0)continue;if(q[2]>t0+150000)break;const d=dist({lat:q[0],lon:q[1]},M);if(d<30)hit=true;if(d<best){best=d;bt=q[2]}if(hit&&d>best+5)break}
+   if(bt&&best<80){res.mark=(bt-g)/1000;res.markD=best}}
+  if(race.mode==='updown'&&W!=null){const a=rPosAt(t,t0),b=rPosAt(t,g+60000);if(a&&b){const v=enu(a,b);res.up=v.x*Math.sin(rad(W))+v.y*Math.cos(rad(W))}}}
+ rcache.set(k,res);return res}
+function renderReplay(){const rs=races();
+ $('rRaces').innerHTML=rs.length?rs.map((r,i)=>`<button aria-pressed="${i===rRace}" data-i="${i}">R${r.race}</button>`).join(''):'';
+ $('rRaces').querySelectorAll('button').forEach(b=>b.onclick=()=>{rRace=+b.dataset.i;rRel=-30;rPlay=false;renderReplay()});
+ const race=rs[rRace];
+ $('rInfo').textContent=race?`Start ${hms(race.t)} · vento ${race.wind!=null?f0(race.wind)+'°':'—'} · ${race.mode==='updown'?'up and down':'slalom'}${S.track.length?' · comitato dalla traccia':''}`:'Nessuno start registrato in questa giornata. Gli start si segnano dal Campo.';
+ $('rTracks').innerHTML=RT.length?'':'<div class="note">Nessuna traccia ancora.</div>';
+ RT.forEach(t=>{const d=document.createElement('div');d.className='rt';d.innerHTML=`<input type="checkbox" ${t.vis?'checked':''} aria-label="Mostra"><span class="dot" style="background:${t.color}"></span><span class="nm"></span><button data-a="ren">Nome</button><button data-a="del">Togli</button>`;
+  d.querySelector('.nm').textContent=t.name;d.querySelector('input').onchange=e=>{t.vis=e.target.checked;renderReplay()};
+  d.querySelector('[data-a=del]').onclick=()=>{RT=RT.filter(x=>x!==t);saveRT();renderReplay()};
+  d.querySelector('[data-a=ren]').onclick=()=>{const nm=d.querySelector('.nm');const i=document.createElement('input');i.value=t.name;i.style.cssText='flex:1;min-width:0;font:inherit;padding:6px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg)';
+   const ok=()=>{if(i.value.trim()){t.name=i.value.trim();saveRT()}renderReplay()};i.onkeydown=e=>{if(e.key==='Enter')ok()};i.onblur=ok;nm.replaceWith(i);i.focus();i.select()};
+  $('rTracks').appendChild(d)});
+ const ud=race&&race.mode==='updown';
+ $('rHead').innerHTML=`<tr><th>Atleta</th><th>Linea</th><th>Punto</th><th>Lato buono?</th><th>Vel.</th><th>${ud?'Guadagno 60 s':'Alla boa'}</th></tr>`;
+ if(!race){$('rRes').innerHTML='';drawReplay();return}
+ const rows=RT.filter(t=>t.vis).map(t=>({t,a:analyze(t,race)}));
+ rows.sort((x,y)=>ud?((y.a.up??-1e9)-(x.a.up??-1e9)):((x.a.mark??1e9)-(y.a.mark??1e9)));
+ const best=ud?Math.max(...rows.map(r=>r.a.up??-1e9)):Math.min(...rows.map(r=>r.a.mark??1e9));
+ $('rRes').innerHTML=rows.map(({t,a})=>{const c=a.cross==null?'—':(a.cross<0?`<span class="bad">${f1(a.cross)} s</span>`:'+'+f1(a.cross)+' s');
+  const pt=a.u==null?'—':Math.round(a.u*100)+'% '+(a.side==='cmt'?'comitato':a.side);const gd=a.good==null?(a.fav==='even'?'linea pari':a.side==='centro'?'centro':'—'):(a.good?'<span class="ok">sì</span>':'<span class="bad">no</span>');
+  const last=ud?(a.up==null?'—':Math.round(a.up)+' m'+(a.up===best?' · primo':'')):(a.mark==null?'—':f1(a.mark)+' s'+(a.mark===best?' · primo':' · +'+f1(a.mark-best)));
+  return `<tr><td><span class="dot" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.color};margin-right:6px"></span>${t.name.replace(/</g,'&lt;')}</td><td>${c}</td><td>${pt}</td><td>${gd}</td><td>${a.v==null?'—':f1(a.v)+' kn'}</td><td>${last}</td></tr>`}).join('')||'<tr><td colspan="6" class="note">Carica le tracce dei ragazzi qui sotto.</td></tr>';
+ $('rNote').textContent=ud?'Linea: secondi dopo lo start (rosso = in anticipo). Punto: 0% pin, 100% comitato. Lato buono: partito dalla metà sopravento della linea. Guadagno: metri fatti verso il vento nel primo minuto.':'Linea: secondi dopo lo start (rosso = in anticipo). Punto: 0% pin, 100% comitato. Lato buono: partito dalla metà favorita della linea. Alla boa: secondi dallo start al passaggio vicino alla boa di lasco.';
+ drawReplay();renderRClock()}
+function renderRClock(){const a=Math.abs(Math.round(rRel));$('rRel').textContent=(rRel<0?'−':'+')+Math.floor(a/60)+':'+String(a%60).padStart(2,'0');$('rScrub').value=rRel;$('rPlay').textContent=rPlay?'❚❚':'▶';$('rSpd').textContent=rSpeed+'×'}
+$('rScrub').oninput=e=>{rRel=+e.target.value;renderRClock();drawReplay()};
+$('rPlay').onclick=()=>{rPlay=!rPlay;if(rRel>=150)rRel=-90;rLast=performance.now();renderRClock();if(rPlay)requestAnimationFrame(rTick)};
+$('rSpd').onclick=()=>{rSpeed=rSpeed===1?4:rSpeed===4?10:1;renderRClock()};
+$('rViewStart').onclick=()=>{rView='start';drawReplay()};$('rViewLeg').onclick=()=>{rView='leg';drawReplay()};
+function rTick(n){if(!rPlay)return;rRel=Math.min(150,rRel+(n-rLast)/1000*rSpeed);rLast=n;if(rRel>=150)rPlay=false;renderRClock();drawReplay();if(rPlay)requestAnimationFrame(rTick)}
+const rcv=$('rcv'),rctx=rcv.getContext('2d');
+function drawReplay(){const d=devicePixelRatio||1,Wd=rcv.clientWidth*d,Hd=rcv.clientHeight*d;if(!Wd)return;if(rcv.width!==Wd||rcv.height!==Hd){rcv.width=Wd;rcv.height=Hd}
+ const c=rctx;c.clearRect(0,0,Wd,Hd);const race=races()[rRace];const mu=css('--muted'),fg=css('--fg');c.font=`600 ${12*d}px system-ui`;
+ if(!race||!race.pts.pin){c.fillStyle=mu;c.textAlign='center';c.fillText('Serve uno start con pin registrato',Wd/2,Hd/2);return}
+ const time=race.t+rRel*1000,o=race.pts.pin,rot=rad(race.wind??0);
+ const tr=p=>{const v=enu(o,p);return {x:v.x*Math.cos(rot)-v.y*Math.sin(rot),y:v.x*Math.sin(rot)+v.y*Math.cos(rot)}};
+ const C=cmtAt(race,time)||race.pts.cmt,M=race.pts.mark;
+ let fit=[race.pts.pin,C].filter(Boolean);if(rView==='leg'&&M)fit.push(M);
+ if(rView==='start'&&C){const a=tr(race.pts.pin),b=tr(C);const L=Math.hypot(b.x-a.x,b.y-a.y);fit=fit.map(tr);fit.push({x:(a.x+b.x)/2,y:(a.y+b.y)/2-L*.7},{x:(a.x+b.x)/2,y:(a.y+b.y)/2+L*.6})}else fit=fit.map(tr);
+ const xs=fit.map(p=>p.x),ys=fit.map(p=>p.y);const span=Math.max(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys),60);
+ const s=Math.min(Wd,Hd)*.8/span,cx=(Math.max(...xs)+Math.min(...xs))/2,cy=(Math.max(...ys)+Math.min(...ys))/2;
+ const S2=p=>{const t=tr(p);return {x:Wd/2+(t.x-cx)*s,y:Hd/2-(t.y-cy)*s}};
+ c.save();c.translate(26*d,18*d);c.strokeStyle=css('--wind');c.fillStyle=css('--wind');c.lineWidth=3*d;c.beginPath();c.moveTo(0,0);c.lineTo(0,28*d);c.stroke();c.beginPath();c.moveTo(0,38*d);c.lineTo(-7*d,24*d);c.lineTo(7*d,24*d);c.fill();c.textAlign='left';if(race.wind!=null)c.fillText('Vento '+f0(race.wind)+'°',12*d,14*d);c.restore();
+ const nice=[10,20,50,100,200,500].find(n=>n*s>Wd*.16)||500;c.strokeStyle=mu;c.lineWidth=2*d;c.beginPath();c.moveTo(12*d,Hd-12*d);c.lineTo(12*d+nice*s,Hd-12*d);c.stroke();c.fillStyle=mu;c.textAlign='left';c.fillText(nice+' m',12*d,Hd-18*d);
+ const P=S2(race.pts.pin),Cs=C&&S2(C),Ms=M&&S2(M);
+ if(Ms&&race.mode!=='updown'){c.setLineDash([6*d,6*d]);c.lineWidth=1.5*d;c.globalAlpha=.5;c.strokeStyle=css('--pin');c.beginPath();c.moveTo(P.x,P.y);c.lineTo(Ms.x,Ms.y);c.stroke();if(Cs){c.strokeStyle=css('--cmt');c.beginPath();c.moveTo(Cs.x,Cs.y);c.lineTo(Ms.x,Ms.y);c.stroke()}c.setLineDash([]);c.globalAlpha=1}
+ // favoured end highlight
+ if(Cs&&race.wind!=null){const v=enu(race.pts.pin,C),L=Math.hypot(v.x,v.y),bPC=(deg(Math.atan2(v.x,v.y))+360)%360;let fav=null;
+  if(race.mode==='updown'){const h=Math.cos(rad(bPC-race.wind))*L;fav=Math.abs(h/L)<.035?null:h>0?'cmt':'pin'}
+  else if(M){const vv=cfg.spd*.514444;const tp=dist(race.pts.pin,M)/(vv*pol(twa(brg(race.pts.pin,M),race.wind))),tc=dist(C,M)/(vv*pol(twa(brg(C,M),race.wind)));fav=Math.abs(tp-tc)<1?null:tp<tc?'pin':'cmt'}
+  if(fav){const A=fav==='pin'?P:Cs,B=fav==='pin'?Cs:P;c.strokeStyle=css(fav==='pin'?'--pin':'--cmt');c.globalAlpha=.35;c.lineWidth=12*d;c.lineCap='round';c.beginPath();c.moveTo(A.x,A.y);c.lineTo((A.x+B.x)/2,(A.y+B.y)/2);c.stroke();c.globalAlpha=1;c.lineCap='butt'}}
+ if(Cs){c.strokeStyle=fg;c.lineWidth=2.5*d;c.setLineDash([10*d,7*d]);c.beginPath();c.moveTo(P.x,P.y);c.lineTo(Cs.x,Cs.y);c.stroke();c.setLineDash([])}
+ RT.filter(t=>t.vis).forEach(t=>{c.strokeStyle=t.color;c.lineWidth=2.5*d;c.beginPath();let on=false;for(const q of t.p){if(q[2]<time-30000)continue;if(q[2]>time)break;const z=S2({lat:q[0],lon:q[1]});on?c.lineTo(z.x,z.y):c.moveTo(z.x,z.y);on=true}c.stroke();
+  const h=rPosAt(t,time);if(h){const z=S2(h);c.fillStyle=t.color;c.beginPath();c.arc(z.x,z.y,6*d,0,7);c.fill();c.fillStyle=fg;c.textAlign='left';c.fillText(t.name,z.x+9*d,z.y-8*d)}});
+ const mk=(p,col,lab,sq)=>{if(!p)return;c.fillStyle=col;if(sq)c.fillRect(p.x-8*d,p.y-8*d,16*d,16*d);else{c.beginPath();c.arc(p.x,p.y,8*d,0,7);c.fill()}c.textAlign='center';c.font=`700 ${12*d}px system-ui`;c.fillText(lab,p.x,p.y+24*d)};
+ mk(P,css('--pin'),'Pin');mk(Cs,css('--cmt'),'Comitato',true);if(Ms)mk(Ms,css('--mark'),race.mode==='updown'?'Boa':'Lasco')}
+addEventListener('resize',drawReplay);
+/* ---------- boot ---------- */
+if(S.day!==today()&&!LS.get('day-'+today(),null)){cfg.day=today();S=blank();saveCfg()}
+S.mode=S.mode||cfg.mode;
+loadRT();startGPS();renderSet();all();
+if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+window.__linea={get S(){return S},calc,solve,get RT(){return RT},analyze,races};
+})();
+</script>
+</body>
+</html>
