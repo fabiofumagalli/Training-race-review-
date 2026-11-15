@@ -114,7 +114,7 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
 
   <div class="card">
     <h2>Campo <span class="k">vento in alto</span></h2>
-    <canvas id="field" aria-label="Schema del campo: linea di partenza, comitato, pin e boa di lasco"></canvas>
+    <canvas id="field" aria-label="Schema del campo: linea di partenza, comitato, pin e boa 1"></canvas>
     <div class="facts" id="facts"></div>
     <ul class="checks" id="checks"></ul>
   </div>
@@ -153,7 +153,7 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
 'use strict';
 const $=id=>document.getElementById(id);
 const TZ='Europe/Rome';
-const MARKS=[['pin','Pin','var(--pin)',false],['cmt','Comitato','var(--cmt)',true],['reach','Boa di lasco','var(--reach)',false]];
+const MARKS=[['pin','Pin','var(--pin)',false],['cmt','Comitato','var(--cmt)',true],['reach','Boa 1','var(--reach)',false]];
 const todayRome=()=>new Intl.DateTimeFormat('en-CA',{timeZone:TZ}).format(new Date());
 const clock=d=>new Intl.DateTimeFormat('it-IT',{timeZone:TZ,hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(d);
 const ls={get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
@@ -236,10 +236,10 @@ function fieldFacts(r){
   return f;}
 function checks(r,f){const out=[];const ok=t=>out.push(['ok',t]),w=t=>out.push(['warn',t]);
   if(!r.pin||!r.cmt){w('Mancano '+[!r.pin&&'pin',!r.cmt&&'comitato'].filter(Boolean).join(' e ')+': non posso disegnare la linea.');}
-  if(!r.reach)w('Manca la boa di lasco.');
+  if(!r.reach)w('Manca la boa 1.');
   if(r.wind==null)w('Manca il vento: il disegno è con il nord in alto.');
   if(!r.gun)w('Ora dello start non registrata.');
-  ['pin','cmt','reach'].forEach(k=>{const v=r[k];if(v&&v.acc>8)w((k==='pin'?'Pin':k==='cmt'?'Comitato':'Boa')+': precisione ±'+Math.round(v.acc)+' m, meglio ripetere.');});
+  ['pin','cmt','reach'].forEach(k=>{const v=r[k];if(v&&v.acc>8)w((k==='pin'?'Pin':k==='cmt'?'Comitato':'Boa 1')+': precisione ±'+Math.round(v.acc)+' m, meglio ripetere.');});
   if(f){if(f.L<15)w('Linea di soli '+Math.round(f.L)+' m: pin e comitato sono quasi nello stesso punto. Una delle due posizioni è sbagliata?');
     else if(f.L>500)w('Linea di '+Math.round(f.L)+' m: molto lunga per lo slalom, controlla.');else ok('Linea '+Math.round(f.L)+' m.');
     if(f.M){if(f.dMid<40)w('Boa a '+Math.round(f.dMid)+' m dalla linea: troppo vicina, controlla.');else if(f.dMid>2500)w('Boa a '+Math.round(f.dMid)+' m: molto lontana, controlla.');}
@@ -271,7 +271,7 @@ function drawField(r){const cv=$('field'),ctx=cv.getContext('2d');const d=device
   const dot=(q,col,lab,sq)=>{ctx.fillStyle=col;if(sq)ctx.fillRect(q.x-7,q.y-7,14,14);else{ctx.beginPath();ctx.arc(q.x,q.y,7,0,7);ctx.fill();}
     ctx.fillStyle=fg;ctx.font='600 12px '+css('--txt');ctx.textAlign='center';ctx.fillText(lab,q.x,q.y+(M&&M.y>q.y?-13:22));};
   dot(P,css('--pin'),'Pin',false);dot(C,css('--cmt'),'Comitato',true);
-  if(M){dot(M,css('--reach'),'Boa di lasco',false);ctx.fillStyle=mut;ctx.font='12px '+css('--txt');
+  if(M){dot(M,css('--reach'),'Boa 1',false);ctx.fillStyle=mut;ctx.font='12px '+css('--txt');
     const lab=(a,b,t)=>{ctx.fillText(t,(a.x+b.x)/2+(a.x<b.x?-6:6),(a.y+b.y)/2);};ctx.textAlign='center';
     lab(P,M,Math.round(f.dP)+' m');lab(C,M,Math.round(f.dC)+' m');}
   // scale
@@ -280,8 +280,8 @@ function drawField(r){const cv=$('field'),ctx=cv.getContext('2d');const d=device
   // facts
   const add=(k,v)=>{const dv=document.createElement('div');dv.innerHTML='<span class="k"></span><b></b>';dv.firstChild.textContent=k;dv.lastChild.textContent=v;facts.appendChild(dv);};
   add('Linea',Math.round(f.L)+' m');
-  if(f.M){add('Pin → boa',Math.round(f.dP)+' m'+(f.aP!=null?' · '+Math.round(f.aP)+'°':''));add('Comitato → boa',Math.round(f.dC)+' m'+(f.aC!=null?' · '+Math.round(f.aC)+'°':''));
-    const dd=Math.abs(f.dP-f.dC);add('Più vicino alla boa',dd<3?'pari':(f.dP<f.dC?'Pin':'Comitato')+' di '+Math.round(dd)+' m');}
+  if(f.M){add('Pin → boa 1',Math.round(f.dP)+' m'+(f.aP!=null?' · '+Math.round(f.aP)+'°':''));add('Comitato → boa 1',Math.round(f.dC)+' m'+(f.aC!=null?' · '+Math.round(f.aC)+'°':''));
+    const dd=Math.abs(f.dP-f.dC);add('Più vicino alla boa 1',dd<3?'pari':(f.dP<f.dC?'Pin':'Comitato')+' di '+Math.round(dd)+' m');}
 }
 
 /* ---------- render ---------- */
@@ -350,7 +350,7 @@ $('day').addEventListener('change',e=>{const v=e.target.value;if(!/^\d{4}-\d{2}-
 $('delRace').onclick=function(){const b=this;if(S.races.length<2)return;if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='Tocca ancora per eliminare R'+race().n;setTimeout(()=>{b.dataset.arm='';b.textContent='Elimina regata';},3000);return;}
   b.dataset.arm='';b.textContent='Elimina regata';const n=race().n;S.races.splice(cur,1);cur=Math.max(0,cur-1);S.log.push({t:clock(new Date()),r:n,txt:'regata eliminata'});changed();};
 function summary(){const f=p=>p?p.lat.toFixed(6)+','+p.lon.toFixed(6)+(p.acc?' ±'+Math.round(p.acc)+'m':'')+(p.ok?' verificato':''):'?';
-  return ['Sessione '+S.day+' · Imperia'].concat(S.races.map(r=>`R${r.n} start ${r.gun||'?'} · vento ${r.wind??'?'}${r.windTo!=null?'-'+r.windTo:''} · pin ${f(r.pin)} · comitato ${f(r.cmt)} · boa ${f(r.reach)}${r.note?' · '+r.note:''}`)).concat(['','Registro:'],S.log.map(e=>e.t+' R'+e.r+' '+e.txt)).join('\n');}
+  return ['Sessione '+S.day+' · Imperia'].concat(S.races.map(r=>`R${r.n} start ${r.gun||'?'} · vento ${r.wind??'?'}${r.windTo!=null?'-'+r.windTo:''} · pin ${f(r.pin)} · comitato ${f(r.cmt)} · boa 1 ${f(r.reach)}${r.note?' · '+r.note:''}`)).concat(['','Registro:'],S.log.map(e=>e.t+' R'+e.r+' '+e.txt)).join('\n');}
 $('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.writeText(t);toast('Riepilogo copiato');}catch(e){const a=$('copyArea');a.value=t;a.style.display='block';a.focus();a.select();toast('Seleziona e copia il testo');}};
 
 /* ---------- boot ---------- */
