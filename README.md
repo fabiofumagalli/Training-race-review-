@@ -1,11 +1,9 @@
-# Linea · partenze
+# Simulatore partenze iQFOiL
 
-Web app per gli allenamenti di partenza (slalom e up and down).
+Simulatore di partenze per gli atleti Koa Sail: slalom (partenza al lasco) e upwind (course racing).
 
-- Registra pin, comitato e boa con più letture GPS e controllo di precisione
-- Vento, procedura di 3 minuti con start al secondo, traccia del comitato in movimento
-- Lato favorito, angoli e distanze dal vivo, con il vento in alto
-- Replay delle partenze con le tracce GPX/TCX dei ragazzi
-- Esportazione GPX + JSON
+- Sposti bias della linea, lunghezza, vento, distanza dalla boa 1
+- Modalità "Real race" on/off
+- Premi ▶ Start e guardi come arrivano alla boa 1 comitato, centro e pin, con distanze e velocità
 
-Si apre dal browser del telefono e si aggiunge alla schermata Home. Funziona anche offline. I dati restano sul telefono.
+Apri il link dal telefono, nessuna installazione.
