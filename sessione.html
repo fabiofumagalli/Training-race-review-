@@ -408,7 +408,7 @@ $('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.w
 /* ---------- boot ---------- */
 S=loadLocal(day);
 cur=S.races.length-1;render();
-(async()=>{if(!window.IQ)return;await IQ.ready;IQ.mountAuth($('auth'),'it');if(IQ.ok){setSync('ok','Collegato all’evento '+S.day);}else if(IQ.sb&&!IQ.user)setSync('','Salvato sul telefono · accedi per inviarlo all’evento');})();
+(async()=>{if(!window.IQ)return;if(!(await IQ.gate('it')))return;IQ.mountAuth($('auth'),'it');if(IQ.ok){setSync('ok','Collegato all’evento '+S.day);}else if(IQ.sb&&!IQ.user)setSync('','Salvato sul telefono · accedi per inviarlo all’evento');})();
 window.addEventListener('resize',()=>drawField(race()));
 
 })();

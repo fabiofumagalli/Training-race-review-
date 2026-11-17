@@ -360,6 +360,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <h2>Team <small>admin only · roles</small></h2>
       <div class="note">Admin: everything. Coach: events, sheets, log, delete any track. Rider: loads own tracks, writes the log. Blocked: no access.</div>
       <div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Since</th></tr></thead><tbody id="teamRows"></tbody></table></div>
+      <div class="bar"><button id="impPub">Move the published tracks into the team database</button><span class="note" id="impMsg">Copies the 14, 15 and 17 Nov tracks into the private database, so they can be removed from the public site.</span></div>
     </div>
     <div class="card">
       <h2>Session sheet <small id="shWhere"></small></h2>
@@ -1242,6 +1243,10 @@ async function renderTeam(){const c=$('teamCard');if(!(window.IQ&&IQ.role==='adm
   list.forEach(p=>{const tr=document.createElement('tr');tr.innerHTML=`<td></td><td></td><td><select><option>admin</option><option>coach</option><option>rider</option><option>blocked</option></select></td><td>${new Date(p.created_at).toLocaleDateString('en-GB')}</td>`;
     tr.children[0].textContent=p.name||'';tr.children[1].textContent=p.email||'';const sel=tr.querySelector('select');sel.value=p.role;sel.disabled=p.id===IQ.user.id;
     sel.onchange=async()=>{try{await IQ.setRole(p.id,sel.value);}catch(e){alertMsg('Role not changed: '+(e.message||e));sel.value=p.role;}};tb.appendChild(tr);});}
+$('impPub').onclick=async()=>{if(logMode!=='db'){$('impMsg').textContent='Sign in first.';return;}const pub=tracks.filter(t=>t.id.startsWith('pub-'));let n=0,skip=0;
+  $('impPub').disabled=true;for(const tr of pub){if(tracks.some(x=>x.shared&&x.day===tr.day&&x.name===tr.name)){skip++;continue;}
+    try{await shareTrack(tr);n++;$('impMsg').textContent='Copied '+n+' of '+pub.length+'…';}catch(e){$('impMsg').textContent='Stopped: '+(e.message||e.code||'error');$('impPub').disabled=false;return;}}
+  $('impMsg').textContent='Done: '+n+' tracks copied'+(skip?', '+skip+' already there':'')+'. Tell Claude, and the public copies will be removed from the site.';$('impPub').disabled=false;};
 function alertMsg(t){$('evMsg').textContent=t;}
 $('evDay').addEventListener('change',renderEvent);
 $('evSave').onclick=async()=>{const d=$('evDay').value,n=$('evName').value.trim().slice(0,80);if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){alertMsg('Pick a day.');return;}
@@ -1402,9 +1407,7 @@ const sd=store.get('day',null),sr=store.get('race',null);
 day=allDays().includes(sd)?sd:allDays()[allDays().length-1];
 race=sr&&sr.startsWith('S:')?null:(RACES.find(r=>r.key===sr&&r.day===day)||racesOfDay(day)[0]||null);
 rel=race?-30:0;lastFit=race?'start':'all';
-routeHash();
-loadPublished();
-initLog();
+(async()=>{if(!window.IQ||!(await IQ.gate('en')))return;routeHash();loadPublished();initLog();})();
 })();
 </script>
 </body></html>

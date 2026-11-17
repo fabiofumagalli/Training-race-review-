@@ -86,5 +86,37 @@ IQ.mountAuth=function(el,lang){const it=lang==='it';const T=(en,i)=>it?i:en;
     f.querySelector('[name=x]').onclick=()=>d.remove();f.e.focus();};
 };
 
+/* full-screen gate: nothing of the page is shown until the person is signed in with an active profile */
+IQ.gate=async function(lang){const it=lang==='it';const T=(en,i)=>it?i:en;
+  const st=document.createElement('style');st.textContent='body.iq-locked>*:not(.iq-gate):not(.iq-gate *){display:none!important}';document.head.appendChild(st);
+  document.body.classList.add('iq-locked');await IQ.ready;
+  if(IQ.ok){document.body.classList.remove('iq-locked');return true;}
+  const g=document.createElement('div');g.className='iq-gate';
+  g.style.cssText='min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:"Public Sans",system-ui,sans-serif;color:#E9F3F9;background:radial-gradient(900px 500px at 85% -10%,rgba(124,92,255,.25),transparent 60%),radial-gradient(800px 500px at -10% 0,rgba(61,214,245,.18),transparent 60%),#06111A';
+  g.innerHTML=`<div style="width:100%;max-width:400px;display:flex;flex-direction:column;gap:18px;align-items:stretch">
+    <div style="display:flex;align-items:center;gap:12px"><div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,#3DD6F5,#7C5CFF);display:grid;place-items:center"><svg width="30" height="30" viewBox="0 0 26 26"><path d="M13 2 L13 19 L4 19 Z" fill="#04121B"/><path d="M14.5 5 L21 19 L14.5 19 Z" fill="#04121B" opacity=".55"/><path d="M3 21.5 Q13 25 23 21.5" stroke="#04121B" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
+      <div><div style="font:600 34px/1 Oswald,'Arial Narrow',sans-serif;letter-spacing:.5px">IQ<span style="background:linear-gradient(90deg,#3DD6F5,#7C5CFF);-webkit-background-clip:text;background-clip:text;color:transparent">training</span></div>
+      <div style="font-size:13px;color:#8FA9BA;margin-top:4px">${T('Team training analysis','Analisi allenamenti del team')}</div></div></div>
+    <div id="iqgBody"></div></div>`;
+  document.body.appendChild(g);const B=g.querySelector('#iqgBody');
+  if(!IQ.sb){B.innerHTML=`<p style="color:#F7B740">${T('The login service cannot be reached. Check the connection and reload.','Il servizio di accesso non risponde. Controlla la connessione e ricarica.')}</p>`;return false;}
+  if(IQ.user){B.innerHTML=`<div style="padding:16px;border-radius:16px;background:#0E2130;border:1px solid #1F3A4E;line-height:1.5">${IQ.role==='blocked'?T('Your access has been blocked by the team admin.','Il tuo accesso è stato bloccato dall’amministratore.'):T('Your profile is being prepared. Reload in a moment; if it persists, ask the admin.','Il tuo profilo è in preparazione. Ricarica tra poco; se continua, chiedi all’amministratore.')}</div><button style="margin-top:12px;width:100%;min-height:44px;border-radius:12px;border:1px solid #1F3A4E;background:#0A1A26;color:inherit;font:inherit;cursor:pointer">${T('Sign out','Esci')}</button>`;
+    B.querySelector('button').onclick=()=>IQ.signOut();return false;}
+  B.innerHTML=`<form style="display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:18px;background:#0E2130;border:1px solid #1F3A4E;box-shadow:0 10px 30px rgba(0,0,0,.35)">
+    <div style="font:500 22px/1 Oswald,sans-serif">${T('Sign in','Accedi')}</div>
+    <input type="email" name="e" placeholder="Email" autocomplete="email" required style="font:inherit;color:inherit;background:#0A1A26;border:1px solid #1F3A4E;border-radius:10px;padding:12px">
+    <input type="password" name="p" placeholder="${T('Password (min. 6 characters)','Password (min. 6 caratteri)')}" autocomplete="current-password" minlength="6" required style="font:inherit;color:inherit;background:#0A1A26;border:1px solid #1F3A4E;border-radius:10px;padding:12px">
+    <input type="text" name="n" placeholder="${T('Your name (only for a new account)','Il tuo nome (solo per un account nuovo)')}" autocomplete="name" style="font:inherit;color:inherit;background:#0A1A26;border:1px solid #1F3A4E;border-radius:10px;padding:12px">
+    <div class="m" style="font-size:13px;min-height:18px;color:#F7B740"></div>
+    <button type="submit" style="min-height:48px;border-radius:12px;border:0;background:linear-gradient(135deg,#3DD6F5,#7C5CFF);color:#04121B;font:700 16px 'Public Sans',sans-serif;cursor:pointer">${T('Sign in','Accedi')}</button>
+    <button type="button" name="up" style="min-height:44px;border-radius:12px;border:1px solid #1F3A4E;background:#0A1A26;color:inherit;font:inherit;cursor:pointer">${T('Create a new account','Crea un account nuovo')}</button>
+    <div style="font-size:12px;color:#8FA9BA;line-height:1.45">${T('Team members only. The admin decides each person’s role.','Solo per i membri del team. L’amministratore decide il ruolo di ciascuno.')}</div></form>`;
+  const f=B.querySelector('form'),m=f.querySelector('.m');const busy=b=>f.querySelectorAll('button').forEach(x=>x.disabled=b);
+  f.onsubmit=async ev=>{ev.preventDefault();busy(true);m.textContent='';try{await IQ.signIn(f.e.value.trim(),f.p.value);location.reload();}catch(e){m.textContent=T('Sign-in failed: ','Accesso non riuscito: ')+(e.message||e);busy(false);}};
+  f.querySelector('[name=up]').onclick=async()=>{if(!f.reportValidity())return;busy(true);m.textContent='';
+    try{const ok=await IQ.signUp(f.e.value.trim(),f.p.value,f.n.value.trim());if(ok)location.reload();else{m.textContent=T('Account created: confirm it from the email, then sign in.','Account creato: confermalo dalla mail, poi accedi.');busy(false);}}
+    catch(e){m.textContent=T('Could not create the account: ','Account non creato: ')+(e.message||e);busy(false);}};
+  f.e.focus();return false;};
+
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
