@@ -79,6 +79,22 @@ select,input[type=text],input[type=time],input[type=number],textarea{background:
 .miniplay .t{font-family:var(--num);font-size:22px;min-width:84px;font-variant-numeric:tabular-nums}
 .stage.full .legend{bottom:90px}
 body.lock{overflow:hidden}
+.hero{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:18px;border-radius:20px;border:1px solid var(--line);
+  background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--panel)),color-mix(in srgb,var(--accent2) 16%,var(--panel)));box-shadow:var(--shadow)}
+.hero h2{font-family:var(--num);font-weight:500;font-size:34px;margin:4px 0 2px;letter-spacing:.3px}
+#home{display:flex;flex-direction:column;gap:14px}#home[hidden]{display:none!important}
+.hgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px}@media (max-width:860px){.hgrid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:600px){#hTiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.hsec{font-family:var(--num);font-weight:500;font-size:20px;margin:0 0 8px;letter-spacing:.3px}
+.slist{display:flex;flex-direction:column;gap:10px}
+.scard{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;width:100%;padding:12px 14px;border-radius:16px;background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);box-shadow:var(--shadow);cursor:pointer;color:var(--fg)}
+.scard:hover{border-color:var(--accent)}
+.scard .dt{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:12px;background:var(--bg2);border:1px solid var(--line);padding:6px 0}
+.scard .dt b{font-family:var(--num);font-size:26px;font-weight:500;line-height:1}.scard .dt small{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.scard .tt{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.scard .mt{font-size:12px;color:var(--muted);display:flex;gap:6px;flex-wrap:wrap;margin-top:4px;align-items:center}
+.scard .go{font-size:20px;color:var(--accent)}
+.empty{padding:16px;border-radius:14px;border:1.5px dashed var(--line);color:var(--muted);font-size:13px;line-height:1.5}
 .coachhd{display:inline-flex;align-items:center;min-height:36px;padding:6px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--fg);text-decoration:none;font-size:13px;font-weight:600}
 .coachlink{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:14px;text-decoration:none;color:var(--fg);background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 22%,transparent),color-mix(in srgb,var(--accent2) 22%,transparent));border:1px solid color-mix(in srgb,var(--accent) 40%,transparent)}
 .coachlink span:first-child{font-size:22px}.coachlink span:nth-child(2){flex:1}.coachlink small{color:var(--muted)}
@@ -188,9 +204,20 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="logo" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 2 L13 19 L4 19 Z" fill="#04121B" opacity=".9"/><path d="M14.5 5 L21 19 L14.5 19 Z" fill="#04121B" opacity=".55"/><path d="M3 21.5 Q13 25 23 21.5" stroke="#04121B" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
       <div><h1>IQ<span>training</span></h1><div class="sub">Training analysis · tracks, manoeuvres, speed and coach log</div></div>
     </div>
-    <div class="bar"><div class="bar" id="days" role="group" aria-label="Day"></div><span id="auth"></span><button class="coachhd" id="goSetup" style="cursor:pointer;border-color:var(--accent)">📋 Setup · coach sheet</button><a class="coachhd" href="sessione.html" target="_blank" rel="noopener" title="Open the coach page for the water">🚩 Coach page</a><button class="icon-btn" id="theme" aria-label="Switch light or dark theme">☀</button></div>
+    <div class="bar"><div class="bar" id="days" role="group" aria-label="Day"></div><button class="coachhd" id="goHome">🏠 Home</button><span id="auth"></span><button class="coachhd" id="goSetup" style="cursor:pointer;border-color:var(--accent)">📋 Setup · coach sheet</button><a class="coachhd" href="sessione.html" target="_blank" rel="noopener" title="Open the coach page for the water">🚩 Coach page</a><button class="icon-btn" id="theme" aria-label="Switch light or dark theme">☀</button></div>
   </header>
   <div class="status" id="teamStatus" hidden></div>
+  <section id="home" hidden>
+    <div class="hero"><div><div class="lab" id="hDate"></div><h2 id="hHello">Welcome</h2><div class="note" id="hSub"></div></div>
+      <div class="bar" id="hActions"></div></div>
+    <div class="tiles" id="hTiles"></div>
+    <div class="hgrid">
+      <div><h3 class="hsec">My sessions</h3><div class="slist" id="hMine"></div></div>
+      <div><h3 class="hsec">Team sessions</h3><div class="slist" id="hTeam"></div></div>
+    </div>
+    <input type="file" id="hFile" accept=".gpx,.tcx,.xml" multiple hidden>
+  </section>
+  <div id="analysis">
   <div class="bar" id="tabs" role="group" aria-label="Race or session"></div>
   <div class="strip" id="strip"></div>
   <div class="tiles" id="tiles"></div>
@@ -363,6 +390,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
     </div>
     <div class="entries" id="entries"></div>
   </section>
+  </div>
 </div>
 
 <script>
@@ -825,7 +853,7 @@ $('chartMode').addEventListener('click',e=>{const b=e.target.closest('button');i
 
 /* ================= UI ================= */
 function renderDays(){const el=$('days');el.innerHTML='<span class="lab">Day</span>';const seg=document.createElement('div');seg.className='seg';
-  allDays().forEach(dd=>{const b=document.createElement('button');b.textContent=fmtDay(dd)+(sheets[dd]&&sheets[dd].name?' · '+sheets[dd].name:'');b.setAttribute('aria-pressed',dd===day);b.onclick=()=>selectDay(dd);seg.appendChild(b);});el.appendChild(seg);}
+  allDays().forEach(dd=>{const b=document.createElement('button');b.textContent=fmtDay(dd)+(sheets[dd]&&sheets[dd].name?' · '+sheets[dd].name:'');b.setAttribute('aria-pressed',dd===day);b.onclick=()=>openDay(dd);seg.appendChild(b);});el.appendChild(seg);}
 function renderTabs(){const el=$('tabs');el.innerHTML='';
   const gs=groupsOf(day);if(gs.length>1){const sel=document.createElement('select');sel.setAttribute('aria-label','Group of riders');const cg=curGroup();
     gs.forEach((g,i)=>{const o=document.createElement('option');o.value=g.id;o.textContent=`Group ${i+1} · ${fmtHM(g.t0)}–${fmtHM(g.t1)} · ${g.members.length} rider${g.members.length>1?'s':''}`;sel.appendChild(o);});
@@ -833,6 +861,47 @@ function renderTabs(){const el=$('tabs');el.innerHTML='';
   const s=document.createElement('button');s.className='tab';s.textContent='Session';s.setAttribute('aria-pressed',!race);s.title='Whole day';s.onclick=()=>selectRace(null);el.appendChild(s);
   const rs=racesOfDay(day);if(rs.length){const l=document.createElement('span');l.className='lab';l.style.marginLeft='8px';l.textContent='Races';el.appendChild(l);}
   rs.forEach(r=>{const b=document.createElement('button');b.className='tab';b.textContent='R'+r.n;b.setAttribute('aria-pressed',r===race);b.setAttribute('aria-label','Race '+r.n);b.onclick=()=>selectRace(r);el.appendChild(b);});}
+/* ================= HOME ================= */
+let pageView='home';
+function showView(v){pageView=v;$('home').hidden=v!=='home';$('analysis').hidden=v!=='analysis';$('goHome').hidden=v==='home';
+  if(v==='home')renderHome();else requestAnimationFrame(()=>{fitted=false;resize();refit();allRender();draw();});window.scrollTo(0,0);}
+function openDay(dd){if(location.hash!=='#d-'+dd)location.hash='d-'+dd;else{selectDay(dd);showView('analysis');}}
+window.addEventListener('hashchange',routeHash);
+function routeHash(){const m=location.hash.match(/^#d-(\d{4}-\d{2}-\d{2})$/);if(m){if(m[1]!==day||pageView!=='analysis'){selectDay(m[1]);}showView('analysis');}else showView('home');}
+function dayInfo(dd){const ts=tracks.filter(t=>t.day===dd),names=[...new Set(ts.map(t=>t.name))],rs=RACES.filter(r=>r.day===dd);
+  return {ts,names,nr:rs.length,name:sheets[dd]&&sheets[dd].name||'',mine:!!(myId&&ts.some(t=>t.owner===myId)),t0:ts.length?Math.min(...ts.map(t=>t.tStart)):null,t1:ts.length?Math.max(...ts.map(t=>t.tEnd)):null};}
+function sessCard(dd){const i=dayInfo(dd),dt=new Date(dd+'T12:00:00Z');const b=document.createElement('button');b.className='scard';
+  const wd=new Intl.DateTimeFormat(LOC,{weekday:'short',timeZone:'UTC'}).format(dt),mo=new Intl.DateTimeFormat(LOC,{month:'short',timeZone:'UTC'}).format(dt);
+  b.innerHTML=`<span class="dt"><small>${wd}</small><b>${dt.getUTCDate()}</b><small>${mo}</small></span><span><div class="tt"></div><div class="mt"></div></span><span class="go">›</span>`;
+  b.querySelector('.tt').textContent=i.name||('Training · '+fmtDay(dd));
+  const mt=b.querySelector('.mt');const add=(t,c)=>{const x=document.createElement('span');x.className='chip';x.textContent=t;if(c)x.style.borderColor=c;mt.appendChild(x);};
+  add(i.names.length?i.names.length+' rider'+(i.names.length>1?'s':''):'no tracks yet');if(i.nr)add(i.nr+' race'+(i.nr>1?'s':''));
+  if(i.t0)add(fmtHM(i.t0)+'–'+fmtHM(i.t1));if(i.mine)add('✓ your track','var(--good)');
+  if(i.names.length){const n=document.createElement('span');n.textContent=i.names.slice(0,5).join(', ')+(i.names.length>5?'…':'');mt.appendChild(n);}
+  b.onclick=()=>openDay(dd);return b;}
+function renderHome(){const IQx=window.IQ;const nm=IQx&&IQx.profile&&IQx.profile.name;
+  $('hDate').textContent=new Intl.DateTimeFormat(LOC,{weekday:'long',day:'numeric',month:'long',timeZone:TZ}).format(Date.now());
+  $('hHello').textContent=nm?'Hi '+nm.split(' ')[0]+' 👋':'Welcome to IQtraining';
+  $('hSub').textContent=nm?(IQx.role==='admin'?'Team admin':IQx.role==='coach'?'Coach':'Rider')+' · your sessions and the team’s, all in one place.':'Sign in (top right) to load your tracks and see the whole team’s sessions.';
+  const A=$('hActions');A.innerHTML='';const btn=(t,f,primary)=>{const b=document.createElement('button');b.textContent=t;if(primary)b.className='primary';b.onclick=f;A.appendChild(b);};
+  btn('⬆ Upload my track',()=>$('hFile').click(),true);
+  if(!IQx||!IQx.user||IQx.isStaff())btn('＋ New event',()=>{location.hash='d-'+day;showView('analysis');showPanel('setup');$('evDay').value=todayStr();$('evName').focus();});
+  const cl=document.createElement('a');cl.className='coachhd';cl.href='sessione.html';cl.target='_blank';cl.rel='noopener';cl.textContent='🚩 Coach page';A.appendChild(cl);
+  const days=allDays().slice().sort().reverse();
+  const mine=myId?days.filter(dd=>dayInfo(dd).mine):[];
+  // my stats
+  const T=$('hTiles');T.innerHTML='';
+  if(myId){const my=tracks.filter(t=>t.owner===myId);let sec=0,dist=0,top=0;
+    my.forEach(tr=>{const r=tr.rs;const buf=[];for(let i=0;i<r.n;i++){if(!r.OK[i]){buf.length=0;continue;}if(r.V[i]>1.5){sec++;dist+=r.V[i];}buf.push(r.V[i]);if(buf.length>10)buf.shift();if(buf.length===10){const m=buf.reduce((a,b)=>a+b,0)/10;if(m>top)top=m;}}});
+    const tile=(k,v,u,w,c)=>`<div class="tile" style="--c:${c}"><div class="k">${k}</div><div class="v">${v}<small>${u}</small></div><div class="w">${w}</div></div>`;
+    T.innerHTML=tile('My sessions',new Set(my.map(t=>t.day)).size,'','with your own track',css('--accent'))+tile('Time on the water',(sec/3600).toFixed(1),'h','moving above 3 kn',css('--accent2'))+tile('Distance',(dist/1000).toFixed(0),'km','all your tracks',css('--good'))+tile('Top speed · 10 s',(top*KN).toFixed(1),'kn','your best',css('--warn'));}
+  const M=$('hMine');M.innerHTML='';
+  if(!myId)M.innerHTML='<div class="empty">Sign in to see your sessions here.</div>';
+  else if(!mine.length)M.innerHTML='<div class="empty">No tracks of yours yet. Press <b>Upload my track</b> after sailing: it joins the right session by itself.</div>';
+  else mine.forEach(dd=>M.appendChild(sessCard(dd)));
+  const Tm=$('hTeam');Tm.innerHTML='';if(!days.length)Tm.innerHTML='<div class="empty">No sessions yet.</div>';else days.forEach(dd=>Tm.appendChild(sessCard(dd)));}
+$('hFile').addEventListener('change',e=>{const f=Array.from(e.target.files);e.target.value='';if(f.length){loadFiles(f).then(()=>openDay(day));}});
+$('goHome').onclick=()=>{location.hash='home';};
 function selectDay(dd){day=dd;grp=null;store.set('day',dd);const rs=racesOfDay(dd);selectRace(rs.length?rs[0]:null);}
 function selectRace(r){race=r;store.set('race',r?r.key:'S:'+day);selMan=null;playing=false;rng=null;zoom=false;
   rel=r?-30:0;if(!r){const rs=racesOfDay(day);if(rs.length)rel=Math.round((gunMs(rs[0])-60000-win().g)/1000);}
@@ -1201,7 +1270,7 @@ $('seqSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!
 $('theme').onclick=()=>{root.dataset.theme=isDark()?'light':'dark';store.set('theme',root.dataset.theme);$('theme').textContent=isDark()?'☀':'☾';allRender();draw();};
 $('theme').textContent=isDark()?'☀':'☾';
 
-function allRender(){const nm=allMans().length;$('cMan').textContent=nm?'('+nm+')':'';renderDays();renderTabs();renderStrip();renderTiles();renderList();renderLive();renderClock();renderRange();drawSpeed();renderPanel();renderMini();if(panel!=='log')renderLogForm();}
+function allRender(){if(pageView==='home'){renderHome();renderDays();return;}const nm=allMans().length;$('cMan').textContent=nm?'('+nm+')':'';renderDays();renderTabs();renderStrip();renderTiles();renderList();renderLive();renderClock();renderRange();drawSpeed();renderPanel();renderMini();if(panel!=='log')renderLogForm();}
 function tickRender(){renderClock();renderLive();draw();drawSpeed();}
 
 /* ================= controls ================= */
@@ -1308,7 +1377,7 @@ const sd=store.get('day',null),sr=store.get('race',null);
 day=allDays().includes(sd)?sd:allDays()[allDays().length-1];
 race=sr&&sr.startsWith('S:')?null:(RACES.find(r=>r.key===sr&&r.day===day)||racesOfDay(day)[0]||null);
 rel=race?-30:0;lastFit=race?'start':'all';
-requestAnimationFrame(()=>{resize();refit();allRender();draw();});
+routeHash();
 loadPublished();
 initLog();
 })();
