@@ -39,6 +39,7 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
 .cd.go{color:var(--good)}.cd[hidden]{display:none}
 .start:active{transform:scale(.99)}
 .gunrow{display:flex;gap:8px;align-items:center}
+.fin{background:#F472B6;color:#1a0610;border:0;min-height:64px;border-radius:16px;font:600 24px/1 var(--num);letter-spacing:.04em;width:100%}
 .gunrow input{font:600 22px/1 var(--num);font-variant-numeric:tabular-nums;flex:1}
 .btns{display:flex;gap:6px}.btns .gps{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:700;min-width:84px}
 .maps{display:inline-block;margin-top:4px;font-size:13px;color:var(--wind)}
@@ -113,7 +114,12 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
       <input type="time" step="1" id="gun" aria-label="Ora dello start">
       <button id="gunClear" aria-label="Cancella ora dello start">Cancella</button>
     </div>
-    <div class="note">Premi −3:00 o −2:00 nel momento in cui dai il segnale: lo start è esattamente 3 o 2 minuti dopo. Se l'hai perso, scrivi l'ora dello start qui sopra.</div>
+    <button class="fin" id="finBtn">FINE REGATA</button>
+    <div class="gunrow">
+      <input type="time" step="1" id="fin" aria-label="Ora di fine regata">
+      <button id="finClear" aria-label="Cancella ora di fine">Cancella</button>
+    </div>
+    <div class="note">Premi −3:00 o −2:00 nel momento in cui dai il segnale: lo start è esattamente 3 o 2 minuti dopo. Se l'hai perso, scrivi l'ora dello start. A fine regata premi FINE REGATA (o scrivi l'ora).</div>
   </div>
 
   <div class="card">
@@ -150,11 +156,11 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
   </div>
 
   <div class="foot">
-    <button id="copyBtn">Copia per Claude</button>
+    <button id="copyBtn">Copia per IQtraining</button>
     <button id="delRace" class="danger">Elimina regata</button>
   </div>
   <textarea id="copyArea" readonly aria-label="Riepilogo da copiare"></textarea>
-  <div class="note">Tutto resta salvato su questo telefono, anche se chiudi la pagina. A fine giornata premi <b>Copia per Claude</b>, incollalo nella chat insieme alle tracce dei ragazzi e scrivi "replay".</div>
+  <div class="note">Tutto resta salvato su questo telefono, anche se chiudi la pagina. A fine giornata premi <b>Copia per IQtraining</b>, poi in IQtraining apri <b>Setup</b>, incolla, <b>Read sheet</b> e <b>Save for the team</b>. Funziona anche incollato in chat a Claude.</div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -305,7 +311,7 @@ function render(){
   $('rSub').textContent=r.gun?'start '+r.gun+(r.seq?' · sequenza '+r.seq+' min':''):'start non registrato';
   document.querySelectorAll('.start').forEach(b=>b.setAttribute('aria-pressed',r.signal&&+b.dataset.seq===r.seq?'true':'false'));
   tickCd();
-  $('gun').value=r.gun||'';
+  $('gun').value=r.gun||'';$('fin').value=r.finish||'';
   // marks
   const M=$('marks');M.innerHTML='';
   MARKS.forEach(([k,lab,col,sq])=>{const row=document.createElement('div');row.className='mark';
@@ -371,9 +377,18 @@ let nt=null;$('note').addEventListener('input',e=>{race().note=e.target.value;S.
 $('day').addEventListener('change',e=>{const v=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return;day=v;ls.set('sess-day',day);S=loadLocal(day);cur=S.races.length-1;render();subscribe();});
 $('delRace').onclick=function(){const b=this;if(S.races.length<2)return;if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='Tocca ancora per eliminare R'+race().n;setTimeout(()=>{b.dataset.arm='';b.textContent='Elimina regata';},3000);return;}
   b.dataset.arm='';b.textContent='Elimina regata';const n=race().n;S.races.splice(cur,1);cur=Math.max(0,cur-1);S.log.push({t:clock(new Date()),r:n,txt:'regata eliminata'});changed();};
-function summary(){const f=p=>p?p.lat.toFixed(6)+','+p.lon.toFixed(6)+(p.acc?' ±'+Math.round(p.acc)+'m':'')+(p.ok?' verificato':''):'?';
-  return ['Sessione '+S.day+' · Imperia'].concat(S.races.map(r=>`R${r.n} start ${r.gun||'?'}${r.seq?' (sequenza '+r.seq+' min, segnale '+(r.signal||'?')+')':''} · vento ${r.wind??'?'}${r.windTo!=null?'-'+r.windTo:''} · pin ${f(r.pin)} · comitato ${f(r.cmt)} · boa 1 ${f(r.reach)}${r.note?' · '+r.note:''}`)).concat(['','Registro:'],S.log.map(e=>e.t+' R'+e.r+' '+e.txt)).join('\n');}
-$('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.writeText(t);toast('Riepilogo copiato');}catch(e){const a=$('copyArea');a.value=t;a.style.display='block';a.focus();a.select();toast('Seleziona e copia il testo');}};
+function summary(){const f=p=>p?p.lat.toFixed(6)+', '+p.lon.toFixed(6)+(p.acc?' (±'+Math.round(p.acc)+' m'+(p.ok?', verificato':'')+')':''):'';const out=['IQtraining session sheet · '+S.day];
+  S.races.forEach(r=>{out.push('');out.push('R'+r.n);
+    if(r.signal&&r.seq)out.push(`signal ${r.signal} (sequence −${r.seq}:00) → start ${r.gun||'?'}`);else out.push(`start ${r.gun||'?'} (sequence −${r.seq||3}:00)`);
+    if(r.finish)out.push('finish '+r.finish);
+    out.push('wind '+(r.wind==null?'?':r.wind+'°')+(r.windTo!=null?` (shifting ${r.wind}–${r.windTo}°)`:''));
+    if(r.pin)out.push('pin '+f(r.pin));if(r.cmt)out.push('committee '+f(r.cmt));if(r.reach)out.push('mark 1 '+f(r.reach));
+    if(r.note)out.push('note: '+r.note.replace(/\s+/g,' '));});
+  return out.join('\n');}
+$('finBtn').onclick=()=>{const r=race(),t=clock(new Date());r.finish=t;logIt('FINE '+t);changed();toast('Fine R'+r.n+' · '+t);if(navigator.vibrate)try{navigator.vibrate(80);}catch(e){}};
+$('fin').addEventListener('change',e=>{const v=e.target.value;if(!v)return;const r=race(),t=v.length===5?v+':00':v;if(t===r.finish)return;r.finish=t;logIt('fine scritta a mano: '+t);changed();});
+$('finClear').onclick=()=>{const r=race();if(!r.finish)return;logIt('fine cancellata');r.finish='';changed();};
+$('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.writeText(t);toast('Copiato: incollalo in IQtraining › Setup');}catch(e){const a=$('copyArea');a.value=t;a.style.display='block';a.focus();a.select();toast('Seleziona e copia il testo');}};
 
 /* ---------- boot ---------- */
 S=loadLocal(day);
