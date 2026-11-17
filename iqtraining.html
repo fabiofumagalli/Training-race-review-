@@ -215,8 +215,10 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <form class="bar" id="hNewForm">
         <label class="lab" for="hNewDay">Day</label><input type="date" id="hNewDay" required>
         <label class="lab" for="hNewName">Name / place</label><input type="text" id="hNewName" placeholder="e.g. Imperia – starts training" style="flex:1;min-width:200px" maxlength="80">
+        <textarea id="hNewSheet" rows="3" placeholder="Optional: paste the coach page text (“Copia per IQtraining”) – races, start times, wind and marks" style="flex-basis:100%;resize:vertical"></textarea>
         <button type="submit" class="primary">＋ Create event</button><span class="note" id="hNewMsg"></span>
       </form>
+      <div class="note">Without the coach text the event has no races or marks, and the wind is estimated from the riders’ tracks (you can type it in the event later).</div>
     </div>
     <div class="hgrid">
       <div><h3 class="hsec">Events</h3><div class="slist" id="hTeam"></div></div>
@@ -895,8 +897,13 @@ function renderNew(){const IQx=window.IQ,f=$('hNewForm'),m=$('hNewMsg');if(!$('h
   const can=IQx&&IQx.ok&&IQx.isStaff();f.querySelectorAll('input,button').forEach(x=>x.disabled=!can);
   if(!IQx||!IQx.user)m.textContent='Sign in (top) to create events.';else if(!can)m.textContent='Only coaches and the admin create events.';else if(m.textContent.startsWith('Sign in')||m.textContent.startsWith('Only'))m.textContent='';}
 $('hNewForm').addEventListener('submit',async ev=>{ev.preventDefault();const d=$('hNewDay').value,n=$('hNewName').value.trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return;
-  const cur=sheets[d]||{races:[]};const doc=Object.assign({},cur,{races:cur.races||[],name:n||cur.name||'',updated:Date.now(),author:cur.author||myId||null});
-  try{if(logMode==='db')await dbRef.doc('sheets/'+d).set(doc);sheets[d]=doc;store.set('sheets',sheets);rebuildRaces();cache.clear();$('hNewName').value='';$('hNewMsg').textContent='Event created ✓';renderHome();renderDays();}
+  let dd=d,races=null,info='';const txt=$('hNewSheet').value.trim();
+  if(txt){const res=parseSheet(txt);if(!res.races.length){$('hNewMsg').textContent='No races found in the pasted text (look for R1, R2…).';return;}
+    if(res.day&&res.day!==d){dd=res.day;info=' (date taken from the coach text: '+fmtDay(dd)+')';}
+    races=res.races.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun,end:r.end||null,seq:+r.seq||3,wind:r.wind==null?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
+    info=' with '+races.length+' race'+(races.length===1?'':'s')+info;}
+  const cur=sheets[dd]||{races:[]};const doc=Object.assign({},cur,{races:races||cur.races||[],name:n||cur.name||'',updated:Date.now(),author:cur.author||myId||null});
+  try{if(logMode==='db')await dbRef.doc('sheets/'+dd).set(doc);sheets[dd]=doc;store.set('sheets',sheets);rebuildRaces();cache.clear();$('hNewName').value='';$('hNewSheet').value='';$('hNewMsg').textContent='Event created ✓'+info;renderHome();renderDays();}
   catch(e){$('hNewMsg').textContent='Not created: '+(e.message||e.code||'error');}});
 function renderHome(){renderNew();const IQx=window.IQ;const nm=IQx&&IQx.profile&&IQx.profile.name;
   $('hDate').textContent=new Intl.DateTimeFormat(LOC,{weekday:'long',day:'numeric',month:'long',timeZone:TZ}).format(Date.now());
