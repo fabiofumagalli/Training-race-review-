@@ -1,0 +1,57 @@
+[
+ {
+  "file": "imperia.xml",
+  "name": "Traccia Imperia",
+  "day": "2026-11-14"
+ },
+ {
+  "file": "ligurie.xml",
+  "name": "Traccia Ligurie",
+  "day": "2026-11-14"
+ },
+ {
+  "file": "roger-14.xml",
+  "name": "Roger",
+  "day": "2026-11-14"
+ },
+ {
+  "file": "alina-15.xml",
+  "name": "Alina",
+  "day": "2026-11-15"
+ },
+ {
+  "file": "ernestine-15.xml",
+  "name": "Ernestine",
+  "day": "2026-11-15"
+ },
+ {
+  "file": "yoan-15.xml",
+  "name": "Yoan",
+  "day": "2026-11-15"
+ },
+ {
+  "file": "roger-15.xml",
+  "name": "Roger",
+  "day": "2026-11-15"
+ },
+ {
+  "file": "imperia-17.gpx",
+  "name": "Imperia",
+  "day": "2026-11-17"
+ },
+ {
+  "file": "ligurie-17.gpx",
+  "name": "Ligurie",
+  "day": "2026-11-17"
+ },
+ {
+  "file": "roger-17.gpx",
+  "name": "Roger",
+  "day": "2026-11-17"
+ },
+ {
+  "file": "alina-17.gpx",
+  "name": "Alina",
+  "day": "2026-11-17"
+ }
+]
