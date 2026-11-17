@@ -210,10 +210,17 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
   <section id="home" hidden>
     <div class="hero"><div><div class="lab" id="hDate"></div><h2 id="hHello">Welcome</h2><div class="note" id="hSub"></div></div>
       <div class="bar" id="hActions"></div></div>
-    <div class="tiles" id="hTiles"></div>
+    <div class="card" id="hNew">
+      <h2>Create an event <small>a training day or a regatta</small></h2>
+      <form class="bar" id="hNewForm">
+        <label class="lab" for="hNewDay">Day</label><input type="date" id="hNewDay" required>
+        <label class="lab" for="hNewName">Name / place</label><input type="text" id="hNewName" placeholder="e.g. Imperia – starts training" style="flex:1;min-width:200px" maxlength="80">
+        <button type="submit" class="primary">＋ Create event</button><span class="note" id="hNewMsg"></span>
+      </form>
+    </div>
     <div class="hgrid">
-      <div><h3 class="hsec">My sessions</h3><div class="slist" id="hMine"></div></div>
-      <div><h3 class="hsec">Team sessions</h3><div class="slist" id="hTeam"></div></div>
+      <div><h3 class="hsec">Events</h3><div class="slist" id="hTeam"></div></div>
+      <div><h3 class="hsec">My sessions</h3><div class="slist" id="hMine"></div><div class="tiles" id="hTiles" style="margin-top:12px"></div></div>
     </div>
     <input type="file" id="hFile" accept=".gpx,.tcx,.xml" multiple hidden>
   </section>
@@ -878,19 +885,25 @@ function dayInfo(dd){const ts=tracks.filter(t=>t.day===dd),names=[...new Set(ts.
 function sessCard(dd){const i=dayInfo(dd),dt=new Date(dd+'T12:00:00Z');const b=document.createElement('button');b.className='scard';
   const wd=new Intl.DateTimeFormat(LOC,{weekday:'short',timeZone:'UTC'}).format(dt),mo=new Intl.DateTimeFormat(LOC,{month:'short',timeZone:'UTC'}).format(dt);
   b.innerHTML=`<span class="dt"><small>${wd}</small><b>${dt.getUTCDate()}</b><small>${mo}</small></span><span><div class="tt"></div><div class="mt"></div></span><span class="go">›</span>`;
-  b.querySelector('.tt').textContent=i.name||('Training · '+fmtDay(dd));
+  b.querySelector('.tt').textContent=i.name||('Training · '+fmtDay(dd));if(dd===todayStr()){const t=document.createElement('span');t.className='chip';t.textContent='TODAY';t.style.cssText='margin-left:8px;background:var(--accent);color:#04121B;border:0';b.querySelector('.tt').appendChild(t);}
   const mt=b.querySelector('.mt');const add=(t,c)=>{const x=document.createElement('span');x.className='chip';x.textContent=t;if(c)x.style.borderColor=c;mt.appendChild(x);};
   add(i.names.length?i.names.length+' rider'+(i.names.length>1?'s':''):'no tracks yet');if(i.nr)add(i.nr+' race'+(i.nr>1?'s':''));
   if(i.t0)add(fmtHM(i.t0)+'–'+fmtHM(i.t1));if(i.mine)add('✓ your track','var(--good)');
   if(i.names.length){const n=document.createElement('span');n.textContent=i.names.slice(0,5).join(', ')+(i.names.length>5?'…':'');mt.appendChild(n);}
   b.onclick=()=>openDay(dd);return b;}
-function renderHome(){const IQx=window.IQ;const nm=IQx&&IQx.profile&&IQx.profile.name;
+function renderNew(){const IQx=window.IQ,f=$('hNewForm'),m=$('hNewMsg');if(!$('hNewDay').value)$('hNewDay').value=todayStr();
+  const can=IQx&&IQx.ok&&IQx.isStaff();f.querySelectorAll('input,button').forEach(x=>x.disabled=!can);
+  if(!IQx||!IQx.user)m.textContent='Sign in (top) to create events.';else if(!can)m.textContent='Only coaches and the admin create events.';else if(m.textContent.startsWith('Sign in')||m.textContent.startsWith('Only'))m.textContent='';}
+$('hNewForm').addEventListener('submit',async ev=>{ev.preventDefault();const d=$('hNewDay').value,n=$('hNewName').value.trim();if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return;
+  const cur=sheets[d]||{races:[]};const doc=Object.assign({},cur,{races:cur.races||[],name:n||cur.name||'',updated:Date.now(),author:cur.author||myId||null});
+  try{if(logMode==='db')await dbRef.doc('sheets/'+d).set(doc);sheets[d]=doc;store.set('sheets',sheets);rebuildRaces();cache.clear();$('hNewName').value='';$('hNewMsg').textContent='Event created ✓';renderHome();renderDays();}
+  catch(e){$('hNewMsg').textContent='Not created: '+(e.message||e.code||'error');}});
+function renderHome(){renderNew();const IQx=window.IQ;const nm=IQx&&IQx.profile&&IQx.profile.name;
   $('hDate').textContent=new Intl.DateTimeFormat(LOC,{weekday:'long',day:'numeric',month:'long',timeZone:TZ}).format(Date.now());
   $('hHello').textContent=nm?'Hi '+nm.split(' ')[0]+' 👋':'Welcome to IQtraining';
   $('hSub').textContent=nm?(IQx.role==='admin'?'Team admin':IQx.role==='coach'?'Coach':'Rider')+' · your sessions and the team’s, all in one place.':'Sign in (top right) to load your tracks and see the whole team’s sessions.';
   const A=$('hActions');A.innerHTML='';const btn=(t,f,primary)=>{const b=document.createElement('button');b.textContent=t;if(primary)b.className='primary';b.onclick=f;A.appendChild(b);};
   btn('⬆ Upload my track',()=>$('hFile').click(),true);
-  if(!IQx||!IQx.user||IQx.isStaff())btn('＋ New event',()=>{location.hash='d-'+day;showView('analysis');showPanel('setup');$('evDay').value=todayStr();$('evName').focus();});
   const cl=document.createElement('a');cl.className='coachhd';cl.href='sessione.html';cl.target='_blank';cl.rel='noopener';cl.textContent='🚩 Coach page';A.appendChild(cl);
   const days=allDays().slice().sort().reverse();
   const mine=myId?days.filter(dd=>dayInfo(dd).mine):[];
@@ -904,7 +917,7 @@ function renderHome(){const IQx=window.IQ;const nm=IQx&&IQx.profile&&IQx.profile
   if(!myId)M.innerHTML='<div class="empty">Sign in to see your sessions here.</div>';
   else if(!mine.length)M.innerHTML='<div class="empty">No tracks of yours yet. Press <b>Upload my track</b> after sailing: it joins the right session by itself.</div>';
   else mine.forEach(dd=>M.appendChild(sessCard(dd)));
-  const Tm=$('hTeam');Tm.innerHTML='';if(!days.length)Tm.innerHTML='<div class="empty">No sessions yet.</div>';else days.forEach(dd=>Tm.appendChild(sessCard(dd)));}
+  const Tm=$('hTeam');Tm.innerHTML='';if(!days.length)Tm.innerHTML='<div class="empty">No events yet: create the first one above.</div>';else days.forEach(dd=>Tm.appendChild(sessCard(dd)));}
 $('hFile').addEventListener('change',e=>{const f=Array.from(e.target.files);e.target.value='';if(f.length){loadFiles(f).then(()=>openDay(day));}});
 $('goHome').onclick=()=>{location.hash='home';};
 function selectDay(dd){day=dd;grp=null;store.set('day',dd);const rs=racesOfDay(dd);selectRace(rs.length?rs[0]:null);}
