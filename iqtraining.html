@@ -401,6 +401,7 @@ const brg=(a,b)=>(deg(Math.atan2(b.x-a.x,b.y-a.y))+360)%360;
 const wrap=a=>((a%360)+540)%360-180;
 const twa=(course,wind)=>Math.abs(wrap(course-wind));
 function gunMs(r){const s=gunOverrides[r.key]||r.gun;return Date.parse(`${r.day}T${s.length===5?s+':00':s}+01:00`);}
+let durSet=store.get('dur',{});
 const seqOf=r=>seqOverrides[r.key]||r.seq||3;
 const okPt=p=>p&&isFinite(p.lat)&&isFinite(p.lon)&&Math.abs(p.lat)<=90&&Math.abs(p.lon)<=180;
 function prepRace(src,day,from){const r=Object.assign({},src,{day,from});r.key=day+'-R'+r.n;r.seq=r.seq||3;
@@ -527,7 +528,7 @@ function nearestRace(t){let best=null,bd=Infinity;racesOfDay(day).forEach(r=>{co
 function windAt(t){return windInfo(t).w;}
 const viewWind=()=>race?windInfo(gunMs(race)).w:dayWind(day);
 function win(){
-  if(race){const g=gunMs(race);let t1=g+300000;if(race.end){const e=Date.parse(`${race.day}T${race.end.length===5?race.end+':00':race.end}+01:00`);if(e>g+20000)t1=Math.min(e+60000,g+3600000);}return {g,t0:g-seqOf(race)*60000,t1};}
+  if(race){const g=gunMs(race),t0=g-seqOf(race)*60000;const dm=durSet[race.key];if(dm)return {g,t0,t1:g+dm*60000};const ae=autoEnd(race);if(ae)return {g,t0,t1:ae};let t1=g+300000;if(race.end){const e=Date.parse(`${race.day}T${race.end.length===5?race.end+':00':race.end}+01:00`);if(e>g+20000)t1=Math.min(e+60000,g+3600000);}return {g,t0:g-seqOf(race)*60000,t1};}
   const ts=dayTracks();if(!ts.length){const rs=racesOfDay(day);if(rs.length){const g=gunMs(rs[0]);return {g,t0:g-1800000,t1:gunMs(rs[rs.length-1])+1800000};}const g=Date.parse(day+'T12:00:00+01:00');return {g,t0:g,t1:g+3600000};}
   const t0=Math.min(...ts.map(t=>t.tStart)),t1=Math.max(...ts.map(t=>t.tEnd));return {g:t0,t0,t1};
 }
@@ -824,14 +825,27 @@ function selectRace(r){race=r;store.set('race',r?r.key:'S:'+day);selMan=null;pla
   rel=r?-30:0;if(!r){const rs=racesOfDay(day);if(rs.length)rel=Math.round((gunMs(rs[0])-60000-win().g)/1000);}
   lastFit=r?'start':'all';cache.clear();allRender();refit();draw();}
 function renderStrip(){const el=$('strip');
-  if(race&&!geo(race)){el.innerHTML=windBox()+`<span>Start <b>${fmtClock(gunMs(race))}</b> · signal −${seqOf(race)}:00</span><span class="note">No line or mark 1 in the session sheet</span>`;}
+  if(race&&!geo(race)){el.innerHTML=windBox()+`<span>Start <b>${fmtClock(gunMs(race))}</b> · signal −${seqOf(race)}:00</span>`+durSel()+`<span class="note">No line or mark 1 in the session sheet</span>`;}
   else if(race){const r=race,closer=r.dP<r.dC?'Pin':'Committee boat',dd=Math.abs(r.dP-r.dC);
     const wv=windAt(gunMs(r));
-    el.innerHTML=windBox()+`<span>Line <b>${Math.round(r.L)} m</b></span><span>Pin → mark 1 <b>${Math.round(r.dP)} m · ${Math.round(twa(brg(r.P,r.M),wv))}°</b></span><span>Committee → mark 1 <b>${Math.round(r.dC)} m · ${Math.round(twa(brg(r.C,r.M),wv))}°</b></span><span>Closer end <b>${closer}, ${Math.round(dd)} m</b></span><span>Start <b>${fmtClock(gunMs(r))}</b> · signal −${seqOf(r)}:00${gunOverrides[r.key]?' (edited)':''}</span>`;}
+    el.innerHTML=windBox()+`<span>Line <b>${Math.round(r.L)} m</b></span><span>Pin → mark 1 <b>${Math.round(r.dP)} m · ${Math.round(twa(brg(r.P,r.M),wv))}°</b></span><span>Committee → mark 1 <b>${Math.round(r.dC)} m · ${Math.round(twa(brg(r.C,r.M),wv))}°</b></span><span>Closer end <b>${closer}, ${Math.round(dd)} m</b></span><span>Start <b>${fmtClock(gunMs(r))}</b> · signal −${seqOf(r)}:00${gunOverrides[r.key]?' (edited)':''}</span>`+durSel();}
   else{const w=win();el.innerHTML=windBox()+`<span>Session <b>${fmtHM(w.t0)}–${fmtHM(w.t1)}</b></span><span>Athletes <b>${dayTracks().length}</b></span>`;}
   const key=race?race.key:'day:'+day;
+  const ds=$('durSel');if(ds)ds.onchange=()=>{const v=ds.value;if(v==='auto')delete durSet[race.key];else durSet[race.key]=+v;store.set('dur',durSet);cache.clear();rng=null;zoom=false;clampRel();allRender();draw();};
   $('wIn').addEventListener('change',e=>{const v=parseFloat(String(e.target.value).replace(',','.'));if(isFinite(v))setWind(key,v);});
   const wa=$('wAuto');if(wa)wa.onclick=()=>setWind(key,null);}
+/* end of race: coach's finish if logged, else detected from the tracks (riders come off the foil and stay slow), else +5:00 */
+function coachEnd(r){if(!r.end)return null;const e=Date.parse(`${r.day}T${r.end.length===5?r.end+':00':r.end}+01:00`),g=gunMs(r);return e>g+20000&&e<g+3600000?e:null;}
+function detectEnd(r){return memo('ae|'+r.key+'|'+gunMs(r)+'|'+tracks.filter(t=>t.day===r.day).map(t=>t.id).join(','),()=>{
+  const g=gunMs(r),nx=RACES.filter(x=>x.day===r.day&&gunMs(x)>g).map(x=>gunMs(x)-seqOf(x)*60000-30000),cap=Math.min(g+3600000,...nx);
+  const stops=[];tracks.filter(t=>t.day===r.day).forEach(tr=>{const rs=tr.rs;let slow=0;
+    for(let t=g+120000;t<cap;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n)break;const v=rs.OK[i]?rs.V[i]*KN:0;
+      if(v<7){slow++;if(slow>=45){stops.push(t-45000);return;}}else slow=0;}});
+  if(stops.length<2)return null;stops.sort((a,b)=>a-b);const med=stops[Math.floor((stops.length-1)/2)];const e=Math.min(cap,med+45000);return e>g+300000?e:null;});}
+function autoEnd(r){return coachEnd(r)?coachEnd(r)+60000:detectEnd(r);}
+function durSel(){const ce=coachEnd(race),de=ce?null:detectEnd(race);const auto=ce?'coach finish':de?'detected '+fmtRel((de-gunMs(race))/1000):'5 min';const cur=durSet[race.key]||'auto';
+  const opts=[['auto','Auto · '+auto]].concat([5,8,10,15,20,25,30,40,60].map(m=>[m,m+' min']));
+  return `<span class="windbox"><span class="lab">Race length</span><select id="durSel" aria-label="Race length">${opts.map(([v,l])=>`<option value="${v}"${String(v)===String(cur)?' selected':''}>${l}</option>`).join('')}</select></span>`;}
 function windBox(){const t=race?gunMs(race):curT(),wi=windInfo(t),key=race?race.key:'day:'+day,est=race?estimateAt(gunMs(race)):estimateAt(curT());
   const lab={app:'set in app',water:'logged on the water',sheet:'coach’s sheet',race:wi.r?'from R'+wi.r.n:'from race',est:'estimated',none:'no wind'}[wi.src];
   const check=(wi.src!=='est'&&est!=null)?`<span class="note">tracks suggest ${est}°${Math.abs(wrap(est-wi.w))>20?' <span class="warn">— check it</span>':''}</span>`:'';
