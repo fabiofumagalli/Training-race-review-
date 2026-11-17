@@ -318,7 +318,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <a class="coachlink" href="sessione.html" target="_blank" rel="noopener"><span>🚩</span><span><b>Open the coach page</b><br><small>On the water, with GPS: start, finish, wind and marks → “Copia per IQtraining”</small></span><span>↗</span></a>
       <div class="note">The coach’s sheet sets, for every race, the start (and finish) time, sequence, wind and — if the coach logged them — pin, committee boat and mark 1. Paste the text from the coach page and press <b>Read sheet</b>, or just type the races in the table. If there was no coach, leave this empty and type the wind in the wind box at the top.</div>
       <textarea id="shText" rows="6" placeholder="Paste the coach's session sheet here" style="width:100%;resize:vertical"></textarea>
-      <div class="bar"><button id="shRead" class="primary">Read sheet</button><button id="shAdd">+ Add race</button><span style="flex:1"></span><span class="note" id="shMsg"></span></div>
+      <div class="bar"><button id="shRead" class="primary">Read &amp; save sheet</button><button id="shAdd">+ Add race</button><span style="flex:1"></span><span class="note" id="shMsg"></span></div>
       <div class="tablewrap"><table><thead><tr><th>Race</th><th>Start</th><th>Finish</th><th>Seq.</th><th>Wind °</th><th>Pin lat, lon</th><th>Committee lat, lon</th><th>Mark 1 lat, lon</th><th>Note</th><th></th></tr></thead><tbody id="shRows"></tbody></table></div>
       <div class="bar"><button id="shSave" class="primary">Save for the team</button><button id="shDel">Remove sheet</button><span class="note">Saved sheets replace the races of that day for everyone.</span></div>
     </div>
@@ -1088,7 +1088,7 @@ let shDraft=null, shDay=null;
 const llTxt=p=>okPt(p)?p.lat.toFixed(6)+', '+p.lon.toFixed(6):'';
 function parseLL(v){const m=String(v||'').match(/(-?\d{1,2}(?:[.,]\d+)?)\s*[,;/ ]\s*(-?\d{1,3}(?:[.,]\d+)?)/);if(!m)return null;const p={lat:parseFloat(m[1].replace(',','.')),lon:parseFloat(m[2].replace(',','.'))};return okPt(p)?p:null;}
 function addMin(hms,m){const a=hms.split(':').map(Number);let t=a[0]*3600+a[1]*60+(a[2]||0)+m*60;return [Math.floor(t/3600)%24,Math.floor(t/60)%60,t%60].map(x=>String(x).padStart(2,'0')).join(':');}
-function parseSheet(txt){const out={day:null,races:[]};
+function parseSheet(txt){txt=txt.split(/\n\s*(?:Registro|Log)\s*:/i)[0];const out={day:null,races:[]};
   const dm=txt.match(/\b(20\d\d)-(\d\d)-(\d\d)\b/);if(dm)out.day=dm[0];else{const m2=txt.match(/\b(\d{1,2})[\/.](\d{1,2})[\/.](20\d\d|\d\d)\b/);if(m2){const y=m2[3].length===2?'20'+m2[3]:m2[3];out.day=`${y}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;}}
   const parts=txt.split(/(?=(?:^|\n|\s)(?:R\s?\d{1,2}\b|(?:Regata|Race)\s*\d{1,2}\b))/i);
   const byN=new Map();
@@ -1123,17 +1123,18 @@ function renderSetup(){if(shDay!==day||!shDraft){shDraft=curSheetRaces();shDay=d
     tr.querySelector('.jump').onclick=()=>{shDraft.splice(i,1);renderSetup();};tb.appendChild(tr);});
   if(!shDraft.length)tb.innerHTML='<tr><td colspan="10" class="note">No races. Paste the sheet or add races by hand.</td></tr>';
   $('shSave').disabled=!canWrite&&logMode==='db';}
-$('shRead').onclick=()=>{const txt=$('shText').value;if(!txt.trim()){$('shMsg').textContent='Paste the sheet first.';return;}const res=parseSheet(txt);
+$('shRead').onclick=async()=>{const txt=$('shText').value;if(!txt.trim()){$('shMsg').textContent='Paste the sheet first.';return;}const res=parseSheet(txt);
   if(!res.races.length){$('shMsg').textContent='No races found (look for “R1”, “R2”… in the text).';return;}
   if(res.day&&res.day!==day){day=res.day;grp=null;}
   shDraft=res.races;shDay=day;const miss=res.races.filter(r=>!r.gun||r.wind==null).map(r=>'R'+r.n);
-  $('shMsg').textContent=`Read ${res.races.length} race${res.races.length>1?'s':''}${res.day?' for '+fmtDay(res.day):''}.`+(miss.length?' Check '+miss.join(', ')+': start or wind missing.':' Check and save.');allRender();};
+  const msg=`Read ${res.races.length} race${res.races.length>1?'s':''}${res.day?' for '+fmtDay(res.day):''} and saved.`+(miss.length?' Check '+miss.join(', ')+': start or wind missing.':'');await saveSheet();$('shMsg').textContent=msg+' '+$('shMsg').textContent.replace(/^Saved/,'—');};
 $('shAdd').onclick=()=>{const last=shDraft[shDraft.length-1];shDraft.push({end:'',n:(last?last.n:0)+1,seq:last?last.seq:3,gun:'',wind:last?last.wind:null,pin:last?last.pin:null,cmt:last?last.cmt:null,reach:last?last.reach:null,windNote:''});renderSetup();};
-$('shSave').onclick=async()=>{const races=shDraft.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.end?(r.end.length===5?r.end+':00':r.end):null,seq:+r.seq||3,wind:r.wind==null||!isFinite(r.wind)?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
+$('shSave').onclick=()=>saveSheet();
+async function saveSheet(){const races=shDraft.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.end?(r.end.length===5?r.end+':00':r.end):null,seq:+r.seq||3,wind:r.wind==null||!isFinite(r.wind)?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
   if(!races.length){$('shMsg').textContent='Each race needs a number and a start time.';return;}
   const doc={races,updated:Date.now(),author:myId||null};sheets[day]=doc;store.set('sheets',sheets);
   if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).set(doc);$('shMsg').textContent='Saved for the team.';}catch(e){$('shMsg').textContent='Not saved online ('+(e&&e.code||'error')+'), kept in this browser.';}}else $('shMsg').textContent='Saved in this browser only.';
-  rebuildRaces();cache.clear();const rs=racesOfDay(day);selectRace(rs.length?rs[0]:null);showPanel('setup');};
+  rebuildRaces();cache.clear();const rs=racesOfDay(day);selectRace(rs.length?rs[0]:null);showPanel('setup');}
 $('shDel').onclick=async()=>{if(!sheets[day])return;delete sheets[day];store.set('sheets',sheets);if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).delete();}catch(e){}}
   shDraft=null;rebuildRaces();cache.clear();const rs=racesOfDay(day);selectRace(rs.length?rs[0]:null);showPanel('setup');$('shMsg').textContent='Sheet removed.';};
 
