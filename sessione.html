@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Sessione di allenamento</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="team.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600&family=Public+Sans:wght@400;600;700&display=swap">
 <style>
 :root{--bg:#F3F6F4;--panel:#FFFFFF;--fg:#0E2433;--muted:#4A5A66;--line:#C9D6D3;--pin:#C4561A;--cmt:#0F7066;--reach:#6A4C9C;--wind:#2A64A3;--bad:#B42318;--good:#2B7A3D;
@@ -95,6 +97,7 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
     </div>
     <div class="sync ok" id="sync"><i></i><span>Salvato sul telefono</span></div>
   </header>
+  <div id="auth" style="justify-content:flex-end"></div>
 
   <div class="datebar">
     <span class="k">Giorno</span>
@@ -160,7 +163,7 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
     <button id="delRace" class="danger">Elimina regata</button>
   </div>
   <textarea id="copyArea" readonly aria-label="Riepilogo da copiare"></textarea>
-  <div class="note">Tutto resta salvato su questo telefono, anche se chiudi la pagina. A fine giornata premi <b>Copia per IQtraining</b>, poi in IQtraining apri <b>Setup</b>, incolla, <b>Read sheet</b> e <b>Save for the team</b>. Funziona anche incollato in chat a Claude. <a href="iqtraining.html" style="color:inherit;font-weight:600">Apri IQtraining →</a></div>
+  <div class="note">Tutto resta salvato su questo telefono, anche se chiudi la pagina. A fine giornata premi <b>Copia per IQtraining</b>, poi in IQtraining apri <b>Setup</b>, incolla e premi <b>Read &amp; save sheet</b>. Se hai fatto l’accesso (in alto) non serve: regate, vento e boe vanno da sole nell’evento del giorno. Funziona anche incollato in chat a Claude. <a href="iqtraining.html" style="color:inherit;font-weight:600">Apri IQtraining →</a></div>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
@@ -207,7 +210,19 @@ function changed(){S.updatedAt=Date.now();ls.set('sess-'+day,S);render();schedul
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>el.classList.remove('on'),1800);}
 
 /* ---------- GPS ---------- */
-function schedule(){}
+/* evento condiviso: con il login la sessione va direttamente in IQtraining (Setup del giorno) */
+let pushT=null,pushing=false,pushAgain=false;
+function setSync(cls,t){const el=$('sync');el.className='sync '+cls;el.querySelector('span').textContent=t;}
+function toSheet(){return S.races.filter(r=>r.gun).map(r=>({n:r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.finish||null,seq:r.seq||3,wind:r.wind??null,
+  pin:r.pin?{lat:r.pin.lat,lon:r.pin.lon}:null,cmt:r.cmt?{lat:r.cmt.lat,lon:r.cmt.lon}:null,reach:r.reach?{lat:r.reach.lat,lon:r.reach.lon}:null,
+  windNote:[r.windTo!=null&&r.wind!=null?'shifting '+r.wind+'–'+r.windTo+'°':'',r.note||''].filter(Boolean).join(' · ').slice(0,120)}));}
+function schedule(){if(!(window.IQ&&IQ.ok)||!toSheet().length)return;clearTimeout(pushT);pushT=setTimeout(push,1500);}
+async function push(){if(pushing){pushAgain=true;return;}pushing=true;setSync('','Invio all’evento…');
+  try{const ref=IQ.db.doc('sheets/'+S.day);const cur=await ref.get();const old=cur.exists?cur.data():{};
+    await ref.set(Object.assign({},old,{races:toSheet(),updated:Date.now(),author:IQ.user.id,name:old.name||''}));
+    setSync('ok','Evento '+S.day+' aggiornato · '+clock(new Date()));}
+  catch(e){setSync('err','Non inviato all’evento: salvato sul telefono');}
+  finally{pushing=false;if(pushAgain){pushAgain=false;schedule();}}}
 function subscribe(){}
 let gpsBusy=false;
 function takeGps(btn,done){
@@ -393,6 +408,7 @@ $('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.w
 /* ---------- boot ---------- */
 S=loadLocal(day);
 cur=S.races.length-1;render();
+(async()=>{if(!window.IQ)return;await IQ.ready;IQ.mountAuth($('auth'),'it');if(IQ.ok){setSync('ok','Collegato all’evento '+S.day);}else if(IQ.sb&&!IQ.user)setSync('','Salvato sul telefono · accedi per inviarlo all’evento');})();
 window.addEventListener('resize',()=>drawField(race()));
 
 })();

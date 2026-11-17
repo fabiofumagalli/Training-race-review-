@@ -2,6 +2,8 @@
 <html lang="en" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>IQtraining</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="team.js"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
 :root,[data-theme="dark"]{
@@ -186,8 +188,9 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="logo" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 2 L13 19 L4 19 Z" fill="#04121B" opacity=".9"/><path d="M14.5 5 L21 19 L14.5 19 Z" fill="#04121B" opacity=".55"/><path d="M3 21.5 Q13 25 23 21.5" stroke="#04121B" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
       <div><h1>IQ<span>training</span></h1><div class="sub">Training analysis · tracks, manoeuvres, speed and coach log</div></div>
     </div>
-    <div class="bar"><div class="bar" id="days" role="group" aria-label="Day"></div><button class="coachhd" id="goSetup" style="cursor:pointer;border-color:var(--accent)">📋 Setup · coach sheet</button><a class="coachhd" href="sessione.html" target="_blank" rel="noopener" title="Open the coach page for the water">🚩 Coach page</a><button class="icon-btn" id="theme" aria-label="Switch light or dark theme">☀</button></div>
+    <div class="bar"><div class="bar" id="days" role="group" aria-label="Day"></div><span id="auth"></span><button class="coachhd" id="goSetup" style="cursor:pointer;border-color:var(--accent)">📋 Setup · coach sheet</button><a class="coachhd" href="sessione.html" target="_blank" rel="noopener" title="Open the coach page for the water">🚩 Coach page</a><button class="icon-btn" id="theme" aria-label="Switch light or dark theme">☀</button></div>
   </header>
+  <div class="status" id="teamStatus" hidden></div>
   <div class="bar" id="tabs" role="group" aria-label="Race or session"></div>
   <div class="strip" id="strip"></div>
   <div class="tiles" id="tiles"></div>
@@ -312,6 +315,16 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
   </section>
 
   <section class="panel" id="p-setup" role="tabpanel" hidden>
+    <div class="card">
+      <h2>Event <small id="evWhere"></small></h2>
+      <div class="bar"><span class="lab">Day</span><input type="date" id="evDay"><span class="lab">Name / place</span><input type="text" id="evName" placeholder="e.g. Imperia – training" style="min-width:200px"><button id="evSave" class="primary">Create / rename event</button><span class="note" id="evMsg"></span></div>
+      <div class="note">An event is a training day. Create it before going out (or the coach page creates it when the coach signs in and logs the first race). Riders then sign in, open the day and load their tracks: everyone in the team sees all of them.</div>
+    </div>
+    <div class="card" id="teamCard" hidden>
+      <h2>Team <small>admin only · roles</small></h2>
+      <div class="note">Admin: everything. Coach: events, sheets, log, delete any track. Rider: loads own tracks, writes the log. Blocked: no access.</div>
+      <div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Since</th></tr></thead><tbody id="teamRows"></tbody></table></div>
+    </div>
     <div class="card">
       <h2>Session sheet <small id="shWhere"></small></h2>
       <div class="note" id="shState"></div>
@@ -479,7 +492,7 @@ let focusId=store.get('focus','');
 const focusOK=()=>focusId&&visTracks().some(t=>t.id===focusId)?focusId:'';
 function setFocus(id){focusId=id||'';store.set('focus',focusId);if(!focusId&&colorMode==='spd'){colorMode='ath';$('colorMode').value='ath';}renderList();draw();drawSpeed();}
 const saveDataOn=()=>store.set('dataOn',[...dataOn]);     // time range {a,b} in ms
-const allDays=()=>{const s=new Set(RACES.map(r=>r.day));tracks.forEach(t=>s.add(t.day));return Array.from(s).sort();};
+const allDays=()=>{const s=new Set(RACES.map(r=>r.day));Object.keys(sheets).forEach(d=>s.add(d));tracks.forEach(t=>s.add(t.day));return Array.from(s).sort();};
 /* sessions: tracks of a day that overlap in time and sailed within ~2.5 km of each other */
 let grp=null, dayHide=store.get('dayHide',{}), hideVer=0;   // dayHide: day -> [track ids not in the session]
 const hidden=tr=>(dayHide[tr.day]||[]).includes(tr.id);
@@ -812,7 +825,7 @@ $('chartMode').addEventListener('click',e=>{const b=e.target.closest('button');i
 
 /* ================= UI ================= */
 function renderDays(){const el=$('days');el.innerHTML='<span class="lab">Day</span>';const seg=document.createElement('div');seg.className='seg';
-  allDays().forEach(dd=>{const b=document.createElement('button');b.textContent=fmtDay(dd);b.setAttribute('aria-pressed',dd===day);b.onclick=()=>selectDay(dd);seg.appendChild(b);});el.appendChild(seg);}
+  allDays().forEach(dd=>{const b=document.createElement('button');b.textContent=fmtDay(dd)+(sheets[dd]&&sheets[dd].name?' · '+sheets[dd].name:'');b.setAttribute('aria-pressed',dd===day);b.onclick=()=>selectDay(dd);seg.appendChild(b);});el.appendChild(seg);}
 function renderTabs(){const el=$('tabs');el.innerHTML='';
   const gs=groupsOf(day);if(gs.length>1){const sel=document.createElement('select');sel.setAttribute('aria-label','Group of riders');const cg=curGroup();
     gs.forEach((g,i)=>{const o=document.createElement('option');o.value=g.id;o.textContent=`Group ${i+1} · ${fmtHM(g.t0)}–${fmtHM(g.t1)} · ${g.members.length} rider${g.members.length>1?'s':''}`;sel.appendChild(o);});
@@ -1016,16 +1029,17 @@ const TYPES={istr:{l:'Instruction',c:'#3B82F6'},obi:{l:'Goal',c:'#22A35A'},eser:
 let logMode='local', logDocs=[], dbRef=null, userCap=null, myId=null, iAmOwner=false, canWrite=true, profiles={}, logFilt='race', logFiltAth='all';
 const LOCAL_KEY='log-local';
 function logEntries(){return logDocs;}
-function setStatus(msg){const s=$('logStatus');s.hidden=!msg;s.textContent=msg||'';}
+function setStatus(msg){['logStatus','teamStatus'].forEach(k=>{const s=$(k);s.hidden=!msg;s.textContent=msg||'';});}
 async function initLog(){
   logDocs=store.get(LOCAL_KEY,[]);renderLogAll();
-  let cl=null;for(let i=0;i<20&&!(cl=window.claude);i++)await new Promise(r=>setTimeout(r,250));
-  if(!cl||!cl.use){setStatus('Test version: everything (log, sheets, tracks) is saved in this browser only, not shared with the team yet.');return;}
-  try{userCap=await cl.use('user');}catch(e){userCap=null;}
-  let db=null;try{db=await cl.use('db');}catch(e){db=null;}
-  if(!db){setStatus('Test version: everything (log, sheets, tracks) is saved in this browser only, not shared with the team yet.');return;}
-  if(userCap){try{myId=await userCap.id();}catch(e){}try{iAmOwner=!!userCap.isOwner();}catch(e){}try{const c=await userCap.can('data.write');if(c===false)canWrite=false;}catch(e){}}
-  dbRef=db;logMode='db';setStatus('Connecting to the shared log…');
+  const IQ=window.IQ;if(IQ)await IQ.ready;
+  if(IQ)IQ.mountAuth($('auth'),'en');
+  if(!IQ||!IQ.sb){setStatus('Login service not reachable: everything is saved in this browser only.');return;}
+  if(!IQ.user){setStatus('Not signed in: you see the published tracks only, and what you add stays in this browser. Sign in (top) to share tracks, sheets and the log with the team.');return;}
+  if(!IQ.ok){setStatus(IQ.role==='blocked'?'Your access has been blocked by the team admin.':'Your profile is not ready yet: reload the page in a moment.');return;}
+  const db=IQ.db;myId=IQ.user.id;iAmOwner=IQ.isStaff();canWrite=true;
+  userCap={profiles:IQ.profiles};
+  dbRef=db;logMode='db';setStatus('Connecting to the team data…');
   try{db.collection('tracks').onSnapshot(onTracksSnap,()=>{});}catch(e){}
   try{db.collection('sheets').onSnapshot(sn=>{const nw={};sn.docs.forEach(d=>{const v=d.data();if(v&&Array.isArray(v.races))nw[d.id]=v;});
       if(JSON.stringify(nw)!==JSON.stringify(sheets)){sheets=nw;store.set('sheets',sheets);rebuildRaces();const k=race&&race.key;race=k?RACES.find(r=>r.key===k)||null:null;cache.clear();allRender();refit();draw();}},()=>{});}catch(e){}
@@ -1036,9 +1050,9 @@ async function initLog(){
     else if(Object.keys(windSet).length&&canWrite&&!sn.metadata.fromCache){windDoc.set(Object.assign({},windSet)).catch(()=>{});}},()=>{});}catch(e){}
   const timer=setTimeout(()=>setStatus('The shared log is not answering yet: what you see may be out of date.'),10000);
   db.collection('log').orderBy('created','desc').limit(1000).onSnapshot(snap=>{
-    logDocs=snap.docs.map(d=>Object.assign({id:d.id},d.data()));if(!snap.metadata.fromCache){clearTimeout(timer);setStatus(canWrite?'':'You can read the log but not write to it: ask the owner for Contributor access.');}
+    logDocs=snap.docs.map(d=>Object.assign({id:d.id},d.data()));if(!snap.metadata.fromCache){clearTimeout(timer);setStatus('');}
     resolveNames();renderLogAll();drawSpeed();},
-    err=>{clearTimeout(timer);setStatus('Shared log unavailable ('+(err&&err.code||'error')+').');});
+    err=>{clearTimeout(timer);setStatus('Team data unavailable ('+((err&&(err.message||err.code))||'error')+').');});
 }
 async function resolveNames(){if(!userCap||!userCap.profiles)return;const ids=[...new Set(logDocs.map(e=>e.author).filter(Boolean))];if(!ids.length)return;
   try{const ps=await userCap.profiles(ids);let ch=false;ids.forEach(id=>{const n=(ps&&ps[id]&&ps[id].name)||'';if(profiles[id]!==n){profiles[id]=n;ch=true;}});if(ch)renderEntries();}catch(e){}}
@@ -1127,7 +1141,20 @@ function parseSheet(txt){txt=txt.split(/\n\s*(?:Registro|Log)\s*:/i)[0];const ou
     byN.set(r.n,Object.assign(byN.get(r.n)||{},Object.fromEntries(Object.entries(r).filter(([k,v])=>v!=null))));});
   out.races=[...byN.values()].sort((a,b)=>a.n-b.n);return out;}
 function curSheetRaces(){const sh=sheets[day];if(sh&&sh.races)return sh.races.map(r=>Object.assign({},r));return BUILTIN.filter(r=>r.day===day).map(r=>({n:r.n,gun:r.gun,end:r.end||null,seq:r.seq||3,wind:r.wind,pin:r.pin,cmt:r.cmt,reach:r.reach,windNote:r.windNote||''}));}
-function renderSetup(){if(shDay!==day||!shDraft){shDraft=curSheetRaces();shDay=day;}
+function renderEvent(){$('evDay').value=$('evDay').value||day;const sh=sheets[$('evDay').value];if(document.activeElement!==$('evName'))$('evName').value=sh&&sh.name||'';
+  $('evWhere').textContent=logMode==='db'?'shared with the team':'sign in to share it';}
+async function renderTeam(){const c=$('teamCard');if(!(window.IQ&&IQ.role==='admin')){c.hidden=true;return;}c.hidden=false;
+  const tb=$('teamRows');const list=await IQ.team();tb.innerHTML='';
+  list.forEach(p=>{const tr=document.createElement('tr');tr.innerHTML=`<td></td><td></td><td><select><option>admin</option><option>coach</option><option>rider</option><option>blocked</option></select></td><td>${new Date(p.created_at).toLocaleDateString('en-GB')}</td>`;
+    tr.children[0].textContent=p.name||'';tr.children[1].textContent=p.email||'';const sel=tr.querySelector('select');sel.value=p.role;sel.disabled=p.id===IQ.user.id;
+    sel.onchange=async()=>{try{await IQ.setRole(p.id,sel.value);}catch(e){alertMsg('Role not changed: '+(e.message||e));sel.value=p.role;}};tb.appendChild(tr);});}
+function alertMsg(t){$('evMsg').textContent=t;}
+$('evDay').addEventListener('change',renderEvent);
+$('evSave').onclick=async()=>{const d=$('evDay').value,n=$('evName').value.trim().slice(0,80);if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){alertMsg('Pick a day.');return;}
+  const cur=sheets[d]||{races:[]};const doc=Object.assign({},cur,{name:n,updated:Date.now(),author:cur.author||myId||null});sheets[d]=doc;store.set('sheets',sheets);
+  if(logMode==='db'){try{await dbRef.doc('sheets/'+d).set(doc);alertMsg('Event saved for the team.');}catch(e){alertMsg('Not saved online: '+(e.message||e.code||'error'));}}else alertMsg('Saved in this browser only (sign in to share).');
+  rebuildRaces();day=d;grp=null;cache.clear();const rs=racesOfDay(day);selectRace(rs.length?rs[0]:null);showPanel('setup');};
+function renderSetup(){renderEvent();renderTeam();if(shDay!==day||!shDraft){shDraft=curSheetRaces();shDay=day;}
   $('shWhere').textContent=fmtDay(day);$('cSetup').textContent=sheets[day]?'✓':'';
   const sh=sheets[day];$('shState').innerHTML=sh?`<span class="good">Coach’s sheet saved for ${fmtDay(day)}</span> · ${sh.races.length} race${sh.races.length>1?'s':''}${sh.updated?' · updated '+fmtClock(sh.updated):''}`:(BUILTIN.some(r=>r.day===day)?'Using the races already loaded for this day. Saving a sheet replaces them.':'<span class="warn">No session sheet for this day.</span>');
   const tb=$('shRows');tb.innerHTML='';
@@ -1151,7 +1178,7 @@ $('shAdd').onclick=()=>{const last=shDraft[shDraft.length-1];shDraft.push({end:'
 $('shSave').onclick=()=>saveSheet();
 async function saveSheet(){const races=shDraft.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.end?(r.end.length===5?r.end+':00':r.end):null,seq:+r.seq||3,wind:r.wind==null||!isFinite(r.wind)?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
   if(!races.length){$('shMsg').textContent='Each race needs a number and a start time.';return;}
-  const doc={races,updated:Date.now(),author:myId||null};sheets[day]=doc;store.set('sheets',sheets);
+  const doc={races,updated:Date.now(),author:myId||null,name:(sheets[day]&&sheets[day].name)||''};sheets[day]=doc;store.set('sheets',sheets);
   if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).set(doc);$('shMsg').textContent='Saved for the team.';}catch(e){$('shMsg').textContent='Not saved online ('+(e&&e.code||'error')+'), kept in this browser.';}}else $('shMsg').textContent='Saved in this browser only.';
   rebuildRaces();cache.clear();const rs=racesOfDay(day);selectRace(rs.length?rs[0]:null);showPanel('setup');}
 $('shDel').onclick=async()=>{if(!sheets[day])return;delete sheets[day];store.set('sheets',sheets);if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).delete();}catch(e){}}
