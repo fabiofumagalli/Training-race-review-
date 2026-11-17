@@ -683,14 +683,18 @@ function pillLabel(x,y,text,col,d){ctx.font=`600 ${11*d}px ${css('--txt')}`;cons
   ctx.fillStyle=isDark()?'rgba(6,17,26,.82)':'rgba(255,255,255,.9)';ctx.beginPath();ctx.roundRect(x,y-h/2,w,h,9*d);ctx.fill();
   ctx.strokeStyle=col;ctx.lineWidth=1.2*d;ctx.stroke();ctx.fillStyle=css('--fg');ctx.textAlign='left';ctx.fillText(text,x+6*d,y+4*d);}
 
+const slotMem=new Map();
+/* steadier numbers in the replay: speed averaged over 5 s, heading as a circular mean over 7 s */
+function steady(tr,t){const rs=tr.rs,i=ri(rs,t);let n=0,v=0,sx=0,sy=0;for(let k=i-3;k<=i+3;k++){if(k<0||k>=rs.n||!rs.OK[k])continue;if(Math.abs(k-i)<=2){v+=rs.V[k];n++;}sx+=Math.sin(rad(rs.H[k]));sy+=Math.cos(rad(rs.H[k]));}
+  return n?{v:v/n,hdg:(deg(Math.atan2(sx,sy))+360)%360}:null;}
 function placeLabels(L,d){const W=cv.width,H=cv.height,pad=4*d,placed=[{x:10*d,y:10*d,w:120*d,h:52*d},{x:W-64*d,y:0,w:64*d,h:180*d}];
   const ov=(a,b)=>Math.max(0,Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)+pad)*Math.max(0,Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y)+pad);
-  L.sort((a,b)=>a.q.y-b.q.y).forEach(l=>{const g=14*d,cands=[];
+  L.sort((a,b)=>a.tr.name.localeCompare(b.tr.name)).forEach(l=>{const g=14*d,cands=[];const prev=slotMem.get(l.tr.id);
     for(const k of [0,1,2,3]){const dy=k*(l.h+6*d);cands.push({x:l.q.x+g,y:l.q.y-g-l.h/2-dy},{x:l.q.x+g,y:l.q.y+g-l.h/2+dy},{x:l.q.x-g-l.w,y:l.q.y-g-l.h/2-dy},{x:l.q.x-g-l.w,y:l.q.y+g-l.h/2+dy});}
     let best=null,bs=Infinity;
     cands.forEach((c,i)=>{c.w=l.w;c.h=l.h;c.x=Math.max(6*d,Math.min(W-c.w-6*d,c.x));c.y=Math.max(6*d,Math.min(H-c.h-6*d,c.y));
-      let sc=i*.5;placed.forEach(p=>sc+=ov(c,p)/(d*d));if(sc<bs){bs=sc;best=c;}});
-    placed.push(best);
+      let sc=i*.5+(prev!=null&&i!==prev?400:0);placed.forEach(p=>sc+=ov(c,p)/(d*d));if(sc<bs){bs=sc;best=c;best.i=i;}});
+    slotMem.set(l.tr.id,best.i);placed.push(best);
     const ax=Math.max(best.x,Math.min(best.x+best.w,l.q.x)),ay=Math.max(best.y,Math.min(best.y+best.h,l.q.y));
     if(Math.hypot(ax-l.q.x,ay-l.q.y)>16*d){ctx.strokeStyle=l.tr.color;ctx.globalAlpha=.6;ctx.lineWidth=1*d;ctx.beginPath();ctx.moveTo(l.q.x,l.q.y);ctx.lineTo(ax,ay);ctx.stroke();ctx.globalAlpha=1;}
     if(l.card)dataCard(best.x,best.y+best.h/2,l.tr,l.kn,l.twa,l.cog,d);else pillLabel(best.x,best.y+best.h/2,l.txt,l.tr.color,d);});}
@@ -765,9 +769,10 @@ function draw(){
       ctx.save();ctx.translate(q.x,q.y);ctx.rotate(hd);ctx.fillStyle=tr.color;ctx.shadowColor=tr.color;ctx.shadowBlur=isDark()?16*d:4*d;
       ctx.beginPath();ctx.moveTo(0,-11*d);ctx.lineTo(6*d,7*d);ctx.lineTo(0,3.5*d);ctx.lineTo(-6*d,7*d);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
       ctx.strokeStyle=isDark()?'#06111A':'#fff';ctx.lineWidth=1.5*d;ctx.stroke();ctx.restore();ctx.globalAlpha=1;
-      if(dataOn.has(tr.id)){const sw=wrap(h.hdg-windAt(t)),tw=Math.round(Math.abs(sw));labels.push({q,tr,card:true,w:150*d,h:54*d,kn:h.v*KN,twa:h.v>1.5?tw+'°'+(sw>0?'P':'S'):'—',cog:Math.round(h.hdg)});
+      const st=steady(tr,t)||h;
+      if(dataOn.has(tr.id)){const sw=wrap(st.hdg-windAt(t)),tw=Math.round(Math.abs(sw));labels.push({q,tr,card:true,w:150*d,h:54*d,kn:st.v*KN,twa:st.v>1.5?tw+'°'+(sw>0?'P':'S'):'—',cog:Math.round(st.hdg)});
         if(h.v>1.5){const wd=rad(windAt(t)-(windUp?viewWind():0));ctx.save();ctx.translate(q.x,q.y);ctx.strokeStyle=css('--wind');ctx.globalAlpha=.7;ctx.setLineDash([3*d,3*d]);ctx.lineWidth=1.5*d;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.sin(wd)*34*d,-Math.cos(wd)*34*d);ctx.stroke();ctx.restore();}}
-      else{const txt=tr.name+'  '+(h.v*KN).toFixed(1);ctx.font=`600 ${11*d}px ${css('--txt')}`;labels.push({q,tr,card:false,txt,w:ctx.measureText(txt).width+12*d,h:18*d});}}
+      else{const txt=tr.name+'  '+(st.v*KN).toFixed(1);ctx.font=`600 ${11*d}px ${css('--txt')}`;labels.push({q,tr,card:false,txt,w:ctx.measureText(tr.name+'  00.0').width+12*d,h:18*d});}}
   });
   placeLabels(labels,d);
   $('legend').hidden=colorMode!=='spd';
@@ -982,7 +987,7 @@ function renderList(){const L=$('trkList');L.innerHTML='';const list=dayTracks()
 function renderLive(){const t=curT(),r=refRace(),out=[];
   out.push(`<div class="r k"><span></span><span>Athlete</span><span>kn</span><span>TWA</span><span>${geo(r)?(race&&rel<0?'to line':'to mark 1'):''}</span></div>`);
   const vis=visTracks();
-  vis.forEach(tr=>{const h=posAt(tr,t);let sp='—',ta='—',dl='—',cls='',fc='';
+  vis.forEach(tr=>{const h0=posAt(tr,t),st=h0&&steady(tr,t),h=h0&&st?Object.assign({},h0,st):h0;let sp='—',ta='—',dl='—',cls='',fc='';
     if(h){sp=f1(h.v*KN);if(h.v*KN>=foilThr)fc='style="color:var(--foil)"';if(h.v>1.5){const s=wrap(h.hdg-windAt(t));ta=Math.round(Math.abs(s))+(s>0?'P':'S');}
       if(geo(r)){const v=sub(r.C,r.P),sd=crs(v,sub(h,r.P))/r.L*r.courseSign;
         if(race&&rel<0){dl=(sd>0?'+':'')+Math.round(sd)+' m';if(sd>0)cls='ocs';}else dl=Math.round(len(sub(h,r.M)))+' m';}}
