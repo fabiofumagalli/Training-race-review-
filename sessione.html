@@ -211,7 +211,7 @@ function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');cl
 
 /* ---------- GPS ---------- */
 /* evento condiviso: con il login la sessione va direttamente in IQtraining (Setup del giorno) */
-let pushT=null,pushing=false,pushAgain=false;
+let pushT=null,pushing=false,pushAgain=false,onLoadPush=false;
 function setSync(cls,t){const el=$('sync');el.className='sync '+cls;el.querySelector('span').textContent=t;}
 function toSheet(){return S.races.filter(r=>r.gun).map(r=>({n:r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.finish||null,seq:r.seq||3,wind:r.wind??null,
   pin:r.pin?{lat:r.pin.lat,lon:r.pin.lon}:null,cmt:r.cmt?{lat:r.cmt.lat,lon:r.cmt.lon}:null,reach:r.reach?{lat:r.reach.lat,lon:r.reach.lon}:null,
@@ -219,7 +219,8 @@ function toSheet(){return S.races.filter(r=>r.gun).map(r=>({n:r.n,gun:r.gun.leng
 function schedule(){if(!(window.IQ&&IQ.ok)||!toSheet().length)return;clearTimeout(pushT);pushT=setTimeout(push,1500);}
 async function push(){if(pushing){pushAgain=true;return;}pushing=true;setSync('','Invio all’evento…');
   try{const ref=IQ.db.doc('sheets/'+S.day);const cur=await ref.get();const old=cur.exists?cur.data():{};
-    await ref.set(Object.assign({},old,{races:toSheet(),updated:Date.now(),author:IQ.user.id,name:old.name||''}));
+    if(onLoadPush&&old.updated&&old.updated>(S.updatedAt||0)){onLoadPush=false;setSync('ok','Collegato all’evento '+S.day);return;}onLoadPush=false;
+    await ref.set(Object.assign({},old,{races:toSheet(),coachLog:(S.log||[]).slice(-300),updated:Date.now(),author:IQ.user.id,name:old.name||''}));
     setSync('ok','Evento '+S.day+' aggiornato · '+clock(new Date()));}
   catch(e){setSync('err','Non inviato all’evento: salvato sul telefono');}
   finally{pushing=false;if(pushAgain){pushAgain=false;schedule();}}}
@@ -389,7 +390,7 @@ let wl=null;function scheduleWindLog(){clearTimeout(wl);const r=race(),n=r.n;wl=
 $('oscOn').onchange=e=>{const r=race();r.windTo=e.target.checked?(r.wind!=null?(r.wind+10)%360:70):null;if(r.wind==null&&e.target.checked)r.wind=60;scheduleWindLog();changed();};
 $('oscTo').addEventListener('change',e=>{const r=race();const v=parseInt(e.target.value,10);if(!isFinite(v))return;r.windTo=((v%360)+360)%360;scheduleWindLog();changed();});
 let nt=null;$('note').addEventListener('input',e=>{race().note=e.target.value;S.updatedAt=Date.now();ls.set('sess-'+day,S);clearTimeout(nt);nt=setTimeout(schedule,600);});
-$('day').addEventListener('change',e=>{const v=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return;day=v;ls.set('sess-day',day);S=loadLocal(day);cur=S.races.length-1;render();subscribe();});
+$('day').addEventListener('change',e=>{const v=e.target.value;if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return;day=v;ls.set('sess-day',day);S=loadLocal(day);cur=S.races.length-1;render();subscribe();if(window.IQ&&IQ.ok){setSync('ok','Collegato all’evento '+S.day);if(S.updatedAt&&toSheet().length){onLoadPush=true;schedule();}}});
 $('delRace').onclick=function(){const b=this;if(S.races.length<2)return;if(b.dataset.arm!=='1'){b.dataset.arm='1';b.textContent='Tocca ancora per eliminare R'+race().n;setTimeout(()=>{b.dataset.arm='';b.textContent='Elimina regata';},3000);return;}
   b.dataset.arm='';b.textContent='Elimina regata';const n=race().n;S.races.splice(cur,1);cur=Math.max(0,cur-1);S.log.push({t:clock(new Date()),r:n,txt:'regata eliminata'});changed();};
 function summary(){const f=p=>p?p.lat.toFixed(6)+', '+p.lon.toFixed(6)+(p.acc?' (±'+Math.round(p.acc)+' m'+(p.ok?', verificato':'')+')':''):'';const out=['IQtraining session sheet · '+S.day];
@@ -408,7 +409,7 @@ $('copyBtn').onclick=async()=>{const t=summary();try{await navigator.clipboard.w
 /* ---------- boot ---------- */
 S=loadLocal(day);
 cur=S.races.length-1;render();
-(async()=>{if(!window.IQ)return;if(!(await IQ.gate('it')))return;IQ.mountAuth($('auth'),'it');if(IQ.ok){setSync('ok','Collegato all’evento '+S.day);}else if(IQ.sb&&!IQ.user)setSync('','Salvato sul telefono · accedi per inviarlo all’evento');})();
+(async()=>{if(!window.IQ)return;if(!(await IQ.gate('it')))return;IQ.mountAuth($('auth'),'it');if(IQ.ok){setSync('ok','Collegato all’evento '+S.day);if(S.updatedAt&&toSheet().length){onLoadPush=true;schedule();}}else if(IQ.sb&&!IQ.user)setSync('','Salvato sul telefono · accedi per inviarlo all’evento');})();
 window.addEventListener('resize',()=>drawField(race()));
 
 })();

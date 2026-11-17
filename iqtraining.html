@@ -398,6 +398,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <span style="flex:1"></span>
       <button id="lCopy">Copy log</button>
     </div>
+    <div class="card" id="cpLogCard" hidden><h2>On the water <small>log from the coach page</small></h2><div class="log" id="cpLog" style="display:flex;flex-direction:column;gap:4px;font-size:13px;font-variant-numeric:tabular-nums;max-height:340px;overflow:auto"></div></div>
     <div class="entries" id="entries"></div>
   </section>
   </div>
@@ -1199,14 +1200,19 @@ function renderMini(){const el=$('miniLog');el.innerHTML='';
   list.slice(0,4).forEach(e=>{const ty=TYPES[e.type]||TYPES.oss;const it=document.createElement('div');it.className='it';
     it.innerHTML=`<span class="chip t" style="--c:${ty.c}">${ty.l}</span><span class="tx"></span>`;it.querySelector('.tx').textContent=(e.athlete?e.athlete+': ':'')+e.text;if(e.done)it.style.opacity=.55;el.appendChild(it);});
   if(list.length>4){const n=document.createElement('div');n.className='note';n.textContent='+ '+(list.length-4)+' more';el.appendChild(n);}}
-function renderLogAll(){renderLogForm();renderEntries();renderMini();}
+function renderCoachPageLog(){const c=$('cpLogCard'),L=$('cpLog');const sh=sheets[day];const items=(sh&&Array.isArray(sh.coachLog))?sh.coachLog:[];
+  const list=items.filter(e=>!race||logFilt!=='race'||!e.r||('R'+e.r)===('R'+race.n));c.hidden=!items.length;L.innerHTML='';
+  list.forEach(e=>{const d=document.createElement('div');d.style.cssText='display:grid;grid-template-columns:70px 36px 1fr;gap:8px;padding:4px 0;border-top:1px solid var(--line)';
+    const a=document.createElement('span');a.textContent=e.t||'';a.className='note';const b=document.createElement('span');b.textContent=e.r?'R'+e.r:'';b.style.fontWeight='600';const x=document.createElement('span');x.textContent=e.txt||'';d.append(a,b,x);L.appendChild(d);});
+  if(items.length&&!list.length)L.innerHTML='<div class="note">Nothing logged for this race on the coach page.</div>';}
+function renderLogAll(){renderLogForm();renderEntries();renderMini();renderCoachPageLog();}
 $('logForm').addEventListener('submit',async ev=>{ev.preventDefault();const text=$('lText').value.trim();if(!text){$('lText').focus();return;}
   const att=$('lAttach').checked;
   const e={day:$('lDay').value||day,race:$('lRace').value||'',athlete:$('lAth').value||'',type:$('lType').value,text:text.slice(0,4000),t:att?(rng?rng.a:curT()):null,t2:att&&rng?rng.b:null,done:false,created:Date.now(),author:myId||null};
   if(e.t&&e.day!==day){e.t=null;e.t2=null;}
   $('lSave').disabled=true;const ok=await addEntry(e);$('lSave').disabled=!canWrite;if(ok){$('lText').value='';$('lAttach').checked=false;}});
 $('lType').addEventListener('change',e=>{e.target.dataset.v=e.target.value;});
-$('lFilt').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;logFilt=b.dataset.v;$('lFilt').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderEntries();});
+$('lFilt').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;logFilt=b.dataset.v;$('lFilt').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderEntries();renderCoachPageLog();});
 $('lFiltAth').addEventListener('change',e=>{logFiltAth=e.target.value;renderEntries();});
 $('lCopy').addEventListener('click',async()=>{const list=filteredLog();const txt=list.map(e=>`${fmtDay(e.day)}${e.race?' '+raceLabel(e.race):''} · ${(TYPES[e.type]||TYPES.oss).l}${e.athlete?' · '+e.athlete:''}${e.done?' ✓':''}\n${e.text}`).join('\n\n');
   try{await navigator.clipboard.writeText(txt||'(empty log)');$('lCopy').textContent='Copied ✓';}catch(e){$('lCopy').textContent='Copy failed';}setTimeout(()=>$('lCopy').textContent='Copy log',2000);});
