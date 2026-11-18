@@ -1048,6 +1048,7 @@ function drawManChart(list){const c=$('mvChart'),g=c.getContext('2d'),d=devicePi
   g.strokeStyle=css('--fg');g.globalAlpha=.4;g.beginPath();g.moveTo(X(0),T);g.lineTo(X(0),H-B);g.stroke();g.globalAlpha=1;
   g.setLineDash([3*d,4*d]);g.strokeStyle=css('--foil');g.beginPath();g.moveTo(L,Y(foilThr));g.lineTo(W-R,Y(foilThr));g.stroke();g.setLineDash([]);
   g.lineJoin='round';
+  g.font=`600 ${10*d}px ${css('--txt')}`;g.textAlign='left';g.fillStyle=css('--foil');g.fillText('foiling '+foilThr+' kn',L+4*d,Y(foilThr)-4*d);g.fillStyle=css('--muted');g.fillText('← wind crossed',X(0)+4*d,T+10*d);
   list.forEach(m=>{const isSel=selMan&&selMan.tr===m.tr&&selMan.tc===m.tc;g.strokeStyle=m.tr.color;g.globalAlpha=isSel?1:.28;g.lineWidth=(isSel?3:1.2)*d;g.beginPath();let on=false;
     m.prof.forEach((v,i)=>{if(v==null){on=false;return;}const x=X(i-10),y=Y(v);if(!on){g.moveTo(x,y);on=true;}else g.lineTo(x,y);});g.stroke();});
   g.globalAlpha=1;
