@@ -314,10 +314,10 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="card"><h2>Speed through the manoeuvre <small>aligned on head/stern to wind, kn</small></h2><canvas class="plot" id="mvChart"></canvas>
         <div class="note">Each thin line is one manoeuvre, from 10 s before to 20 s after the bow (tack) or stern (gybe) crosses the wind. Thick lines are each athlete’s average. The dashed green line is the foiling threshold.</div></div>
       <div class="card"><h2>How to read it</h2>
-        <div class="note"><b>Entry</b>: average speed from −10 to −4 s. <b>Min</b>: lowest speed during the manoeuvre. <b>Kept</b>: min ÷ entry. <b>Recovery</b>: seconds to get back to 90% of entry speed. <b>Distance lost</b>: over 20 s (−5 to +15 s), how much less ground was gained upwind (tack) or downwind (gybe) than by holding the entry VMG. <b>Foiling</b>: min speed stayed above the foiling threshold (set it in Speed).<br><br>Manoeuvres are found from the change of tack relative to the race wind (or the session wind): if that wind is badly off, the manoeuvre type will be too. Click a row to see it on the map. Only the selected time range is analysed.</div></div>
+        <div class="note"><b>Entry</b>: average speed from −10 to −4 s. <b>Min</b>: lowest speed during the manoeuvre. <b>Kept</b>: min ÷ entry. <b>Recovery</b>: seconds to get back to 90% of entry speed. <b>Made good</b>: metres gained in 20 s (−5 to +15 s) towards the goal — upwind for a tack, downwind for a gybe. More is better. In brackets, the difference with what the entry VMG would have made (+ = better than entry). <b>Foiling</b>: min speed stayed above the foiling threshold (set it in Speed).<br><br>Manoeuvres are found from the change of tack relative to the race wind (or the session wind): if that wind is badly off, the manoeuvre type will be too. Click a row to see it on the map. Only the selected time range is analysed.</div></div>
     </div>
     <div class="tablewrap" style="max-height:460px">
-      <table><thead><tr><th>Athlete</th><th>When</th><th>Type</th><th class="num">Entry</th><th class="num">Min</th><th class="num">Exit</th><th class="num">Kept</th><th class="num">Recovery</th><th class="num">Turn</th><th class="num">Distance lost</th><th>Foiling</th><th></th></tr></thead>
+      <table><thead><tr><th>Athlete</th><th>When</th><th>Type</th><th class="num">Entry</th><th class="num">Min</th><th class="num">Exit</th><th class="num">Kept</th><th class="num">Recovery</th><th class="num">Turn</th><th class="num">Made good · 20 s</th><th>Foiling</th><th></th></tr></thead>
       <tbody id="mRows"></tbody></table>
     </div>
   </section>
@@ -624,13 +624,13 @@ function maneuvers(tr){
     const cmean=arr=>{let sx=0,sy=0;arr.forEach(h=>{sx+=Math.sin(rad(h));sy+=Math.cos(rad(h));});return {x:sx,y:sy};};
     const ui=cmean(seg(-10,-4,i=>rs.H[i])),uo=cmean(seg(6,12,i=>rs.H[i]));
     const hi=deg(Math.atan2(ui.x,ui.y)),ho=deg(Math.atan2(uo.x,uo.y));const ang=Math.abs(wrap(ho-hi));
-    let loss=null;const ia=ic-5,ib=ic+15;
+    let made=null,vsIn=null;const ia=ic-5,ib=ic+15;
     if(ia>=0&&ib<rs.n&&rs.OK[ia]&&rs.OK[ib]){
       const ax=type==='T'?windAt(tc):windAt(tc)+180, au={x:Math.sin(rad(ax)),y:Math.cos(rad(ax))};
       const vm=seg(-10,-4,i=>rs.V[i]*Math.cos(rad(rs.H[i]-ax)));const vmgIn=vm.reduce((a,b)=>a+b,0)/vm.length;
-      if(vmgIn>0.5){const actual=(rs.X[ib]-rs.X[ia])*au.x+(rs.Y[ib]-rs.Y[ia])*au.y;loss=vmgIn*20-actual;}}
+      const actual=(rs.X[ib]-rs.X[ia])*au.x+(rs.Y[ib]-rs.Y[ia])*au.y;made=actual;if(vmgIn>0.5)vsIn=actual-vmgIn*20;}
     const prof=[];for(let k2=-10;k2<=20;k2++){const i=ic+k2;prof.push(i>=0&&i<rs.n&&rs.OK[i]?rs.V[i]*KN:null);}
-    out.push({tr,tc,type,from:A.s,to:B.s,vIn:vIn*KN,vMin:vMin*KN,vOut:vOut==null?null:vOut*KN,keep:vMin/vIn,rec,ang,loss,foil:vMin*KN>=foilThr,prof,x:rs.X[ic],y:rs.Y[ic]});
+    out.push({tr,tc,type,from:A.s,to:B.s,vIn:vIn*KN,vMin:vMin*KN,vOut:vOut==null?null:vOut*KN,keep:vMin/vIn,rec,ang,made,vsIn,foil:vMin*KN>=foilThr,prof,x:rs.X[ic],y:rs.Y[ic]});
   }
   return out;});
 }
@@ -1018,20 +1018,20 @@ function renderMan(){
   visTracks().filter(t=>mAth==='all'||t.id===mAth).forEach(tr=>{const ms=all.filter(m=>m.tr===tr);
     const box=document.createElement('div');box.className='kpi';box.style.setProperty('--c',tr.color);
     const part=(arr,lab)=>{if(!arr.length)return '';
-      const loss=arr.filter(m=>m.loss!=null).map(m=>m.loss);const keep=arr.reduce((a,m)=>a+m.keep,0)/arr.length;const fo=arr.filter(m=>m.foil).length;
-      return `<div class="sec">${arr.length} ${lab}</div><div>speed kept<b>${pct(keep)}</b></div><div>foiling<b>${fo}/${arr.length}</b></div><div>avg distance lost<b>${loss.length?f0(loss.reduce((a,b)=>a+b,0)/loss.length)+' m':'—'}</b></div><div>avg min speed<b>${f1(arr.reduce((a,m)=>a+m.vMin,0)/arr.length)} kn</b></div>`;};
+      const loss=arr.filter(m=>m.made!=null).map(m=>m.made);const keep=arr.reduce((a,m)=>a+m.keep,0)/arr.length;const fo=arr.filter(m=>m.foil).length;
+      return `<div class="sec">${arr.length} ${lab}</div><div>speed kept<b>${pct(keep)}</b></div><div>foiling<b>${fo}/${arr.length}</b></div><div>avg made good<b>${loss.length?f0(loss.reduce((a,b)=>a+b,0)/loss.length)+' m':'—'}</b></div><div>avg min speed<b>${f1(arr.reduce((a,m)=>a+m.vMin,0)/arr.length)} kn</b></div>`;};
     const T=ms.filter(m=>m.type==='T'),G=ms.filter(m=>m.type==='G');
     box.innerHTML=`<div class="who">${dotH(tr.color)}${esc(tr.name)}</div><div class="g">${part(T,T.length===1?'tack':'tacks')}${part(G,G.length===1?'gybe':'gybes')}${ms.length?'':'<div class="sec">No manoeuvres</div>'}</div>`;
     k.appendChild(box);});
   const tb=$('mRows');tb.innerHTML='';
   if(!list.length)tb.innerHTML=`<tr><td colspan="12" class="note">No manoeuvres in this ${rng?'range':race?'race window (try the whole session)':'session'}.</td></tr>`;
-  const best={},worst={};['T','G'].forEach(ty=>{const a=list.filter(m=>m.type===ty&&m.loss!=null);if(a.length>=3){best[ty]=a.reduce((x,y)=>y.loss<x.loss?y:x);worst[ty]=a.reduce((x,y)=>y.loss>x.loss?y:x);}});
+  const best={},worst={};['T','G'].forEach(ty=>{const a=list.filter(m=>m.type===ty&&m.made!=null);if(a.length>=3){best[ty]=a.reduce((x,y)=>y.made>x.made?y:x);worst[ty]=a.reduce((x,y)=>y.made<x.made?y:x);}});
   list.forEach(m=>{const tr_=document.createElement('tr');if(selMan&&selMan.tr===m.tr&&selMan.tc===m.tc)tr_.className='sel';
     const tag=best[m.type]===m?' <span class="good">best</span>':worst[m.type]===m?' <span class="bad">worst</span>':'';
     const keepC=m.keep>=.85?'good':m.keep<.65?'bad':'';
     tr_.innerHTML=`<td>${dotH(m.tr.color)}${esc(m.tr.name)}</td><td>${whenLabel(m.tc)}</td><td><span class="pill ${m.type==='T'?'t':'g'}">${m.type==='T'?'Tack':'Gybe'}</span> <span class="note">${m.from>0?'P→S':'S→P'}</span></td>
       <td class="num">${f1(m.vIn)}</td><td class="num">${f1(m.vMin)}</td><td class="num">${f1(m.vOut)}</td><td class="num ${keepC}">${pct(m.keep)}<span class="bar-in" style="width:${Math.round(Math.max(0,Math.min(1,m.keep))*40)}px"></span></td><td class="num">${m.rec==null?'<span class="warn">&gt; 30 s</span>':m.rec+' s'}</td><td class="num">${f0(m.ang)}°</td>
-      <td class="num">${m.loss==null?'—':f0(m.loss)+' m'}${tag}</td><td>${m.foil?'<span style="color:var(--foil);font-weight:700">✓</span>':'<span class="note">✗</span>'}</td><td><button class="jump">▶ View</button></td>`;
+      <td class="num">${m.made==null?'—':f0(m.made)+' m'}${m.vsIn==null?'':` <span class="note">(${m.vsIn>=0?'+':''}${f0(m.vsIn)} vs entry)</span>`}${tag}</td><td>${m.foil?'<span style="color:var(--foil);font-weight:700">✓</span>':'<span class="note">✗</span>'}</td><td><button class="jump">▶ View</button></td>`;
     const go=()=>{selMan=m;rel=Math.round((m.tc-8000-win().g)/1000);if(zoom&&rng&&(m.tc<rng.a||m.tc>rng.b))zoom=false;fitMan(m);playing=false;tickRender();renderMan();};
     tr_.querySelector('.jump').onclick=e=>{e.stopPropagation();go();};tr_.style.cursor='pointer';tr_.onclick=go;
     tb.appendChild(tr_);});
