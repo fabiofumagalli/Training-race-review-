@@ -79,6 +79,14 @@ select,input[type=text],input[type=time],input[type=number],textarea{background:
 .miniplay .t{font-family:var(--num);font-size:22px;min-width:84px;font-variant-numeric:tabular-nums}
 .stage.full .legend{bottom:90px}
 body.lock{overflow:hidden}
+.hud{position:absolute;left:12px;top:76px;width:290px;padding:10px 12px;border-radius:16px;background:color-mix(in srgb,var(--panel) 88%,transparent);backdrop-filter:blur(8px);border:1px solid var(--line);box-shadow:var(--shadow);z-index:3;display:flex;flex-direction:column;gap:6px}
+.hud-hd{display:flex;align-items:center;gap:8px;font-size:14px}.hud-hd b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hud-hd button{min-height:26px;padding:0 8px;font-size:12px}
+.hud-foil{font-size:10px;font-weight:700;letter-spacing:.08em;padding:2px 7px;border-radius:999px}
+.hud-main{display:flex;gap:12px;align-items:center}.hud-big{font-family:var(--num);font-size:46px;line-height:.95;font-variant-numeric:tabular-nums;min-width:96px}
+.hud-k{font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.hud-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;flex:1}.hud-grid b{display:block;font-family:var(--num);font-size:18px;font-weight:500;font-variant-numeric:tabular-nums}
+#hudSpark{width:100%;height:44px}
+@media (max-width:600px){.hud{position:static;width:auto;border-radius:0;border-left:0;border-right:0;box-shadow:none}}
 body.rider #goSetup,body.rider [data-p="setup"],body.rider #hNew,body.rider .coachhd[href*="sessione"],body.rider a.coachhd[href="sessione.html"],body.rider #p-setup,body.rider #gunBar,body.rider #noteHere+*{display:none!important}
 .hero{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:18px;border-radius:20px;border:1px solid var(--line);
   background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--panel)),color-mix(in srgb,var(--accent2) 16%,var(--panel)));box-shadow:var(--shadow)}
@@ -238,6 +246,12 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
         <canvas id="cv" aria-label="Race course with line, marks and tracks"></canvas>
         <div class="zoomctl"><button id="zIn" aria-label="Zoom in">+</button><button id="zOut" aria-label="Zoom out">−</button><button id="zFull" aria-label="Full-screen map" title="Full-screen map">⛶</button></div>
         <div class="hint" id="hint">Drag to move · pinch or scroll to zoom · double-tap to zoom in</div>
+        <div class="hud" id="hud" hidden>
+          <div class="hud-hd"><span class="dot" id="hudDot"></span><b id="hudName"></b><span class="hud-foil" id="hudFoil"></span><button id="hudX" aria-label="Stop following">✕</button></div>
+          <div class="hud-main"><div><div class="hud-big" id="hudSpd">—</div><div class="hud-k">knots</div></div>
+            <div class="hud-grid"><div><span class="hud-k">TWA</span><b id="hudTwa">—</b></div><div><span class="hud-k">VMG</span><b id="hudVmg">—</b></div><div><span class="hud-k">COG</span><b id="hudCog">—</b></div><div><span class="hud-k" id="hudMk">Mark 1</span><b id="hudDist">—</b></div></div></div>
+          <canvas id="hudSpark" width="240" height="44"></canvas><div class="hud-k" style="display:flex;justify-content:space-between"><span>last 60 s</span><span id="hudMax"></span></div>
+        </div>
         <div class="legend" id="legend" hidden><span>slow</span><i id="legRamp"></i><span id="legMax">fast</span></div>
         <div class="maptools">
           <button id="vStart">Start</button><button id="vLeg">Course</button><button id="vAll">Fit tracks</button><button id="vRot">Wind up</button>
@@ -709,7 +723,9 @@ function dataCard(x,y,tr,kn,twaTxt,cog,d){const W=150*d,H=54*d;
 function draw(){
   resize();const d=devicePixelRatio||1,W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
   const fg=css('--fg'),mut=css('--muted'),w=win(),A=aw(),t=curT();
-  if(follow){const ft=visTracks().find(x=>x.id===follow);const h=ft&&posAt(ft,t);if(h){const q=rot(h);view.cx=q.x;view.cy=q.y;}}
+  if(follow){const ft=visTracks().find(x=>x.id===follow);const h=ft&&posAt(ft,t);if(h){const st=steady(ft,t)||h;const la=Math.min(60,st.v*4),a=rad(st.hdg);
+      const q=rot({x:h.x+Math.sin(a)*la,y:h.y+Math.cos(a)*la});const dx=q.x-view.cx,dy=q.y-view.cy,far=Math.hypot(dx,dy)*view.s>cv.width*.6;
+      const k=(far||!playing)?1:.18;view.cx+=dx*k;view.cy+=dy*k;}}
   // grid aligned to the view (wind-up grid)
   const nice=[10,20,50,100,200,500,1000,2000].find(n=>n*view.s>W*.14)||2000;
   ctx.strokeStyle=css('--grid');ctx.lineWidth=1*d;
@@ -771,7 +787,7 @@ function draw(){
       ctx.save();ctx.translate(q.x,q.y);ctx.rotate(hd);ctx.fillStyle=tr.color;ctx.shadowColor=tr.color;ctx.shadowBlur=isDark()?16*d:4*d;
       ctx.beginPath();ctx.moveTo(0,-11*d);ctx.lineTo(6*d,7*d);ctx.lineTo(0,3.5*d);ctx.lineTo(-6*d,7*d);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
       ctx.strokeStyle=isDark()?'#06111A':'#fff';ctx.lineWidth=1.5*d;ctx.stroke();ctx.restore();ctx.globalAlpha=1;
-      const st=steady(tr,t)||h;
+      const st=steady(tr,t)||h;if(follow===tr.id){return;}
       if(dataOn.has(tr.id)){const sw=wrap(st.hdg-windAt(t)),tw=Math.round(Math.abs(sw));labels.push({q,tr,card:true,w:150*d,h:54*d,kn:st.v*KN,twa:st.v>1.5?tw+'°'+(sw>0?'P':'S'):'—',cog:Math.round(st.hdg)});
         if(h.v>1.5){const wd=rad(windAt(t)-(windUp?viewWind():0));ctx.save();ctx.translate(q.x,q.y);ctx.strokeStyle=css('--wind');ctx.globalAlpha=.7;ctx.setLineDash([3*d,3*d]);ctx.lineWidth=1.5*d;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(Math.sin(wd)*34*d,-Math.cos(wd)*34*d);ctx.stroke();ctx.restore();}}
       else{const txt=tr.name+'  '+(st.v*KN).toFixed(1);ctx.font=`600 ${11*d}px ${css('--txt')}`;labels.push({q,tr,card:false,txt,w:ctx.measureText(tr.name+'  00.0').width+12*d,h:18*d});}}
@@ -1336,7 +1352,22 @@ $('theme').onclick=()=>{root.dataset.theme=isDark()?'light':'dark';store.set('th
 $('theme').textContent=isDark()?'☀':'☾';
 
 function allRender(){if(pageView==='home'){renderHome();renderDays();return;}const nm=allMans().length;$('cMan').textContent=nm?'('+nm+')':'';renderDays();renderTabs();renderStrip();renderTiles();renderList();renderLive();renderClock();renderRange();drawSpeed();renderPanel();renderMini();if(panel!=='log')renderLogForm();}
-function tickRender(){renderClock();renderLive();draw();drawSpeed();}
+function renderHud(){const H=$('hud'),ft=follow&&visTracks().find(x=>x.id===follow);if(!ft){H.hidden=true;return;}H.hidden=false;const t=curT(),st=steady(ft,t),h=posAt(ft,t);
+  $('hudDot').style.background=ft.color;$('hudDot').style.color=ft.color;$('hudName').textContent=ft.name;
+  if(!st||!h){['hudSpd','hudTwa','hudVmg','hudCog','hudDist'].forEach(k=>$(k).textContent='—');$('hudFoil').textContent='';return;}
+  const kn=st.v*KN,w=windAt(t),sw=wrap(st.hdg-w),a=Math.abs(sw),vmg=kn*Math.cos(rad(a));
+  $('hudSpd').textContent=kn.toFixed(1);$('hudSpd').style.color=kn>=foilThr?css('--foil'):'';
+  $('hudTwa').textContent=Math.round(a)+'° '+(sw>0?'P':'S');$('hudVmg').textContent=(vmg>=0?'↑ ':'↓ ')+Math.abs(vmg).toFixed(1);$('hudCog').textContent=Math.round(st.hdg)+'°';
+  const fo=$('hudFoil');fo.textContent=kn>=foilThr?'FOILING':'OFF FOIL';fo.style.background=kn>=foilThr?'color-mix(in srgb,var(--foil) 22%,transparent)':'color-mix(in srgb,var(--warn) 22%,transparent)';fo.style.color=kn>=foilThr?'var(--foil)':'var(--warn)';
+  const r=refRace();if(geo(r)){const L=legTimes(ft,r,analyzeStart(ft,r));const tgt=(L.t1&&t>L.t1&&r.M2)?r.M2:r.M;$('hudMk').textContent=tgt===r.M2?'Mark 2':'Mark 1';$('hudDist').textContent=Math.round(Math.hypot(tgt.x-h.x,tgt.y-h.y))+' m';}else{$('hudMk').textContent='Dist.';$('hudDist').textContent='—';}
+  const c=$('hudSpark'),d=devicePixelRatio||1;c.width=Math.round(c.clientWidth*d);c.height=Math.round(c.clientHeight*d);const g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);
+  const vals=[];for(let k=-60;k<=0;k++){const s2=steady(ft,t+k*1000);vals.push(s2?s2.v*KN:null);}const mx=Math.max(foilThr+5,...vals.filter(v=>v!=null));$('hudMax').textContent='max '+Math.max(...vals.filter(v=>v!=null),0).toFixed(1)+' kn';
+  const X=i=>i/60*c.width,Y=v=>c.height-2*d-(v/mx)*(c.height-4*d);
+  g.setLineDash([3*d,3*d]);g.strokeStyle=css('--foil');g.globalAlpha=.6;g.beginPath();g.moveTo(0,Y(foilThr));g.lineTo(c.width,Y(foilThr));g.stroke();g.setLineDash([]);g.globalAlpha=1;
+  const gr=g.createLinearGradient(0,0,0,c.height);gr.addColorStop(0,ft.color+'66');gr.addColorStop(1,ft.color+'00');
+  g.beginPath();let on=false,first=0;vals.forEach((v,i)=>{if(v==null)return;if(!on){g.moveTo(X(i),Y(v));on=true;first=i;}else g.lineTo(X(i),Y(v));});
+  if(on){g.strokeStyle=ft.color;g.lineWidth=2*d;g.stroke();g.lineTo(X(60),c.height);g.lineTo(X(first),c.height);g.closePath();g.fillStyle=gr;g.fill();}}
+function tickRender(){renderClock();renderLive();draw();drawSpeed();renderHud();}
 
 /* ================= controls ================= */
 $('scrub').addEventListener('input',e=>{rel=+e.target.value;tickRender();});
@@ -1354,7 +1385,7 @@ const cpt=e=>{const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;return {x
 const qAt=p=>({x:view.cx+(p.x-cv.width/2)/view.s,y:view.cy-(p.y-cv.height/2)/view.s});
 const clampS=s=>Math.max(.02,Math.min(60,s));
 function zoomAt(p,k){const q=qAt(p);view.s=clampS(view.s*k);view.cx=q.x-(p.x-cv.width/2)/view.s;view.cy=q.y+(p.y-cv.height/2)/view.s;stopFollow();draw();}
-function stopFollow(){if(follow){follow='';$('follow').value='';}}
+function stopFollow(){if(follow){follow='';$('follow').value='';setTimeout(renderHud,0);}}
 function startGest(){const ps=[...ptrs.values()];
   if(ps.length===1)gest={k:'pan',p:ps[0],cx:view.cx,cy:view.cy};
   else if(ps.length>=2){const m={x:(ps[0].x+ps[1].x)/2,y:(ps[0].y+ps[1].y)/2};gest={k:'pinch',d0:Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y)||1,s0:view.s,q:qAt(m)};}
@@ -1380,7 +1411,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.querySelec
 $('trailSeg').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;trailSec=+b.dataset.v;store.set('trail',trailSec);markTrail();draw();});
 function markTrail(){$('trailSeg').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',+x.dataset.v===trailSec));}
 markTrail();
-$('follow').addEventListener('change',e=>{follow=e.target.value;if(follow&&view.s<1.2)view.s=1.6;draw();});
+$('follow').addEventListener('change',e=>{follow=e.target.value;if(follow){const d=devicePixelRatio||1;view.s=Math.max(view.s,cv.width/(450*1));}draw();renderHud();});
+$('hudX').onclick=()=>{stopFollow();renderHud();};
 $('mPlay').onclick=()=>$('play').click();
 $('focus').addEventListener('change',e=>setFocus(e.target.value));
 $('dataAll').onclick=()=>{const v=visTracks();const allOn=v.length&&v.every(t=>dataOn.has(t.id));v.forEach(t=>allOn?dataOn.delete(t.id):dataOn.add(t.id));saveDataOn();renderList();draw();};
