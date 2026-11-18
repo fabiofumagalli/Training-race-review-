@@ -79,6 +79,7 @@ select,input[type=text],input[type=time],input[type=number],textarea{background:
 .miniplay .t{font-family:var(--num);font-size:22px;min-width:84px;font-variant-numeric:tabular-nums}
 .stage.full .legend{bottom:90px}
 body.lock{overflow:hidden}
+body.rider #goSetup,body.rider [data-p="setup"],body.rider #hNew,body.rider .coachhd[href*="sessione"],body.rider a.coachhd[href="sessione.html"],body.rider #p-setup,body.rider #gunBar,body.rider #noteHere+*{display:none!important}
 .hero{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;flex-wrap:wrap;padding:18px;border-radius:20px;border:1px solid var(--line);
   background:linear-gradient(135deg,color-mix(in srgb,var(--accent) 16%,var(--panel)),color-mix(in srgb,var(--accent2) 16%,var(--panel)));box-shadow:var(--shadow)}
 .hero h2{font-family:var(--num);font-weight:500;font-size:34px;margin:4px 0 2px;letter-spacing:.3px}
@@ -204,7 +205,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="logo" aria-hidden="true"><svg width="26" height="26" viewBox="0 0 26 26"><path d="M13 2 L13 19 L4 19 Z" fill="#04121B" opacity=".9"/><path d="M14.5 5 L21 19 L14.5 19 Z" fill="#04121B" opacity=".55"/><path d="M3 21.5 Q13 25 23 21.5" stroke="#04121B" stroke-width="2" fill="none" stroke-linecap="round"/></svg></div>
       <div><h1>IQ<span>training</span></h1><div class="sub">Training analysis · tracks, manoeuvres, speed and coach log</div></div>
     </div>
-    <div class="bar"><div class="bar" id="days" role="group" aria-label="Day"></div><button class="coachhd" id="goHome">🏠 Home</button><span id="auth"></span><button class="coachhd" id="goSetup" style="cursor:pointer;border-color:var(--accent)">📋 Setup · coach sheet</button><a class="coachhd" href="sessione.html" target="_blank" rel="noopener" title="Open the coach page for the water">🚩 Coach page</a><button class="icon-btn" id="theme" aria-label="Switch light or dark theme">☀</button></div>
+    <div class="bar"><div class="bar" id="days" role="group" aria-label="Day"></div><button class="coachhd" id="goHome">🏠 Home</button><button class="coachhd" id="asRider" hidden title="See the app as a rider sees it">👁 View as rider</button><span id="auth"></span><button class="coachhd" id="goSetup" style="cursor:pointer;border-color:var(--accent)">📋 Setup · coach sheet</button><a class="coachhd" href="sessione.html" target="_blank" rel="noopener" title="Open the coach page for the water">🚩 Coach page</a><button class="icon-btn" id="theme" aria-label="Switch light or dark theme">☀</button></div>
   </header>
   <div class="status" id="teamStatus" hidden></div>
   <section id="home" hidden>
@@ -298,7 +299,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
     <button role="tab" data-p="man" aria-selected="true">Manoeuvres<span class="cnt" id="cMan"></span></button>
     <button role="tab" data-p="spd">Speed</button>
     <button role="tab" data-p="pol">Polar</button>
-    <button role="tab" data-p="start">Start</button>
+    <button role="tab" data-p="start">Race</button>
     <button role="tab" data-p="log">Coach log<span class="cnt" id="cLog"></span></button>
     <button role="tab" data-p="setup">Setup<span class="cnt" id="cSetup"></span></button>
   </div>
@@ -343,6 +344,11 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
   <section class="panel" id="p-start" role="tabpanel" hidden>
     <div class="bar" id="gunBar"><span class="lab">Start time</span><input type="time" step="1" id="gunIn" aria-label="Start time"><button id="gunReset">Reset</button>
       <span class="lab" style="margin-left:10px">Sequence</span><div class="seg" id="seqSeg"><button data-v="3">3 min</button><button data-v="2">2 min</button></div></div>
+    <div class="tablewrap">
+      <table><thead><tr><th>Athlete</th><th class="num">Distance sailed</th><th class="num">Time</th><th class="num">Avg speed</th><th class="num">Extra vs shortest</th><th class="num">Start → mark 1</th><th>From</th></tr></thead><tbody id="distRows"></tbody></table>
+    </div>
+    <div class="note" id="distNote">Distance sailed from the moment each rider crosses the start line (or the gun, if the line is unknown) to the end of the race (coach’s finish, detected end or the Race length you choose) — everyone over the same time, so more metres = faster. Start → mark 1: metres sailed from the line crossing to mark 1, against the straight-line distance; the % is how efficient the first leg was (100% = straight line, upwind legs are naturally lower because of tacking). With a time range selected, only that stretch is counted. Extra vs shortest: how much more water a rider covered than the one who sailed the least, a sign of extra manoeuvres, wide roundings or a longer route.</div>
+    <h3 class="hsec" style="margin-top:6px">Start</h3>
     <div class="tablewrap">
       <table><thead><tr><th>Athlete</th><th>Line crossing</th><th>Position on line</th><th class="num">Speed at start</th><th class="num">Speed −10 s</th><th class="num">At mark 1</th><th class="num">Gap</th></tr></thead>
       <tbody id="res"></tbody></table>
@@ -591,7 +597,7 @@ function analyzeStart(tr,r){
     if(u<-0.6||u>1.6)continue;
     const tc=rs.t0+(i+f)*1000;res.cross=(tc-g)/1000;res.u=u;res.vStart=rs.V[i]*KN;const v10=vAt(tr,tc-10000);res.v10=v10==null?null:v10*KN;
     let best=Infinity,bt=null,hit=-1;
-    for(let k=i;k<Math.min(rs.n,i+150);k++){if(!rs.OK[k])continue;const d=Math.hypot(rs.X[k]-r.M.x,rs.Y[k]-r.M.y);
+    for(let k=i;k<Math.min(rs.n,i+900);k++){if(!rs.OK[k])continue;const d=Math.hypot(rs.X[k]-r.M.x,rs.Y[k]-r.M.y);
       if(hit<0&&d<30)hit=k;if(d<best){best=d;bt=rs.t0+k*1000;}if(hit>=0&&d>best+5)break;}
     if(bt!=null&&best<80){res.mark=(bt-g)/1000;res.markD=best;}
     break;}
@@ -1100,7 +1106,20 @@ function renderPol(){const c=$('polar'),g=c.getContext('2d'),d=devicePixelRatio|
     const r=document.createElement('tr');r.innerHTML=`<td>${dotH(tr.color)}${esc(tr.name)}</td><td class="num">${f1(bu)} kn VMG</td><td class="num">${bua==null?'—':bua+'°'}</td><td class="num">${f1(bd)} kn VMG</td><td class="num">${bda==null?'—':bda+'°'}</td>`;tb.appendChild(r);});}
 
 /* ---- start ---- */
-function renderStart(){const tb=$('res');tb.innerHTML='';$('gunBar').hidden=!race;
+function renderDist(){const tb=$('distRows');tb.innerHTML='';
+  if(!race){tb.innerHTML='<tr><td colspan="7" class="note">Pick a race (R1, R2…) to see the distance sailed.</td></tr>';return;}
+  const g=gunMs(race),w=aw();
+  const rows=visTracks().map(tr=>{const a=analyzeStart(tr,race);let t0=a.cross!=null?g+a.cross*1000:g,from=a.cross!=null?'line crossing':'gun';
+    if(rng){t0=Math.max(t0,w.t0);from='range start';}const rs=tr.rs,t1=w.t1;let d=0,sec=0;
+    const sail=(ta,tb)=>{let x=0;for(let t=Math.ceil(ta/1000)*1000;t<tb;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n-1)continue;if(rs.OK[i]&&rs.OK[i+1])x+=Math.hypot(rs.X[i+1]-rs.X[i],rs.Y[i+1]-rs.Y[i]);}return x;};
+    let leg=null;if(geo(race)&&a.cross!=null&&a.mark!=null){const tc=g+a.cross*1000,tm=g+a.mark*1000,pc=posAt(tr,tc);if(pc&&tm>tc){const sd=sail(tc,tm),dd=Math.hypot(race.M.x-pc.x,race.M.y-pc.y);leg={sd,dd,eff:dd/sd};}}
+    for(let t=Math.ceil(t0/1000)*1000;t<t1;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n-1)continue;if(rs.OK[i]&&rs.OK[i+1]){d+=Math.hypot(rs.X[i+1]-rs.X[i],rs.Y[i+1]-rs.Y[i]);sec++;}}
+    return {tr,d,sec,from,leg};}).filter(r=>r.sec>20);
+  if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="note">No track data in this race.</td></tr>';return;}
+  const min=Math.min(...rows.map(r=>r.d));rows.sort((a,b)=>a.d-b.d);
+  rows.forEach(r=>{const ex=r.d-min,tr_=document.createElement('tr');
+    tr_.innerHTML=`<td>${dotH(r.tr.color)}${esc(r.tr.name)}</td><td class="num"><b>${r.d>=1000?f1(r.d/1000)+' km':f0(r.d)+' m'}</b></td><td class="num">${fmtRel(r.sec).replace('+','')}</td><td class="num">${f1(r.d/r.sec*KN)} kn</td><td class="num">${ex<1?'<span class="good">shortest</span>':'+'+f0(ex)+' m ('+f0(ex/min*100)+'%)'}</td><td class="num">${r.leg?f0(r.leg.sd)+' m <span class="note">for '+f0(r.leg.dd)+' m direct · '+Math.round(r.leg.eff*100)+'%</span>':'—'}</td><td class="note">${r.from}</td>`;tb.appendChild(tr_);});}
+function renderStart(){renderDist();const tb=$('res');tb.innerHTML='';$('gunBar').hidden=!race;
   $('seqSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',!!race&&+b.dataset.v===seqOf(race)));
   if(!race){tb.innerHTML='<tr><td colspan="7" class="note">Pick a race (R1, R2…) to see the start analysis.</td></tr>';return;}
   $('gunIn').value=(gunOverrides[race.key]||race.gun);
@@ -1410,7 +1429,11 @@ const sd=store.get('day',null),sr=store.get('race',null);
 day=allDays().includes(sd)?sd:allDays()[allDays().length-1];
 race=sr&&sr.startsWith('S:')?null:(RACES.find(r=>r.key===sr&&r.day===day)||racesOfDay(day)[0]||null);
 rel=race?-30:0;lastFit=race?'start':'all';
-(async()=>{if(!window.IQ||!(await IQ.gate('en')))return;routeHash();loadPublished();initLog();})();
+(async()=>{if(!window.IQ||!(await IQ.gate('en')))return;
+  const realStaff=IQ.isStaff();let pv=false;try{pv=sessionStorage.getItem('iq-preview')==='rider';}catch(e){}
+  if(realStaff){const b=$('asRider');b.hidden=false;if(pv){IQ.isStaff=()=>false;IQ.role='rider';b.textContent='✕ Exit rider view';b.style.borderColor='var(--warn)';const bar=document.createElement('div');bar.className='status';bar.textContent='Rider view: this is what a rider sees. Coach and admin tools are hidden.';document.querySelector('.wrap').insertBefore(bar,document.querySelector('.wrap').children[1]);}
+    b.onclick=()=>{try{pv?sessionStorage.removeItem('iq-preview'):sessionStorage.setItem('iq-preview','rider');}catch(e){}location.reload();};}
+  if(!IQ.isStaff()){document.body.classList.add('rider');}routeHash();loadPublished();initLog();})();
 })();
 </script>
 </body></html>
