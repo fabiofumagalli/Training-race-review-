@@ -172,7 +172,7 @@ input,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px soli
 'use strict';
 const $=id=>document.getElementById(id);
 const TZ='Europe/Rome';
-const MARKS=[['pin','Pin','var(--pin)',false],['cmt','Comitato','var(--cmt)',true],['reach','Boa 1','var(--reach)',false]];
+const MARKS=[['pin','Pin','var(--pin)',false],['cmt','Comitato','var(--cmt)',true],['reach','Boa 1','var(--reach)',false],['mark2','Boa 2','#F472B6',false]];
 const todayRome=()=>new Intl.DateTimeFormat('en-CA',{timeZone:TZ}).format(new Date());
 const clock=d=>new Intl.DateTimeFormat('it-IT',{timeZone:TZ,hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).format(d);
 const ls={get(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}};
@@ -181,7 +181,7 @@ let day=todayRome();
 let S=null, cur=0;
 
 function blank(d){return {day:d,updatedAt:0,races:[newRace(1,null)],log:[]};}
-function newRace(n,prev){return {n,gun:'',signal:'',seq:prev?prev.seq||null:null,pin:prev?prev.pin:null,cmt:prev?prev.cmt:null,reach:prev?prev.reach:null,wind:prev?prev.wind:null,windTo:prev?prev.windTo:null,note:''};}
+function newRace(n,prev){return {n,gun:'',signal:'',seq:prev?prev.seq||null:null,pin:prev?prev.pin:null,cmt:prev?prev.cmt:null,reach:prev?prev.reach:null,mark2:prev?prev.mark2:null,wind:prev?prev.wind:null,windTo:prev?prev.windTo:null,note:''};}
 function loadLocal(d){const v=ls.get('sess-'+d);return v&&v.races?v:blank(d);}
 
 /* ---------- coordinate parsing ---------- */
@@ -214,7 +214,7 @@ function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');cl
 let pushT=null,pushing=false,pushAgain=false,onLoadPush=false;
 function setSync(cls,t){const el=$('sync');el.className='sync '+cls;el.querySelector('span').textContent=t;}
 function toSheet(){return S.races.filter(r=>r.gun).map(r=>({n:r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.finish||null,seq:r.seq||3,wind:r.wind??null,
-  pin:r.pin?{lat:r.pin.lat,lon:r.pin.lon}:null,cmt:r.cmt?{lat:r.cmt.lat,lon:r.cmt.lon}:null,reach:r.reach?{lat:r.reach.lat,lon:r.reach.lon}:null,
+  pin:r.pin?{lat:r.pin.lat,lon:r.pin.lon}:null,cmt:r.cmt?{lat:r.cmt.lat,lon:r.cmt.lon}:null,reach:r.reach?{lat:r.reach.lat,lon:r.reach.lon}:null,mark2:r.mark2?{lat:r.mark2.lat,lon:r.mark2.lon}:null,
   windNote:[r.windTo!=null&&r.wind!=null?'shifting '+r.wind+'–'+r.windTo+'°':'',r.note||''].filter(Boolean).join(' · ').slice(0,120)}));}
 function schedule(){if(!(window.IQ&&IQ.ok)||!toSheet().length)return;clearTimeout(pushT);pushT=setTimeout(push,1500);}
 async function push(){if(pushing){pushAgain=true;return;}pushing=true;setSync('','Invio all’evento…');
@@ -398,7 +398,7 @@ function summary(){const f=p=>p?p.lat.toFixed(6)+', '+p.lon.toFixed(6)+(p.acc?' 
     if(r.signal&&r.seq)out.push(`signal ${r.signal} (sequence −${r.seq}:00) → start ${r.gun||'?'}`);else out.push(`start ${r.gun||'?'} (sequence −${r.seq||3}:00)`);
     if(r.finish)out.push('finish '+r.finish);
     out.push('wind '+(r.wind==null?'?':r.wind+'°')+(r.windTo!=null?` (shifting ${r.wind}–${r.windTo}°)`:''));
-    if(r.pin)out.push('pin '+f(r.pin));if(r.cmt)out.push('committee '+f(r.cmt));if(r.reach)out.push('mark 1 '+f(r.reach));
+    if(r.pin)out.push('pin '+f(r.pin));if(r.cmt)out.push('committee '+f(r.cmt));if(r.reach)out.push('mark 1 '+f(r.reach));if(r.mark2)out.push('mark 2 '+f(r.mark2));
     if(r.note)out.push('note: '+r.note.replace(/\s+/g,' '));});
   if(S.log&&S.log.length){out.push('');out.push('Log:');S.log.forEach(e=>out.push(`${e.t} R${e.r} · ${String(e.txt).replace(/\s+/g,' ')}`));}
   return out.join('\n');}

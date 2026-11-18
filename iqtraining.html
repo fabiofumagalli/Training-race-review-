@@ -345,7 +345,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
     <div class="bar" id="gunBar"><span class="lab">Start time</span><input type="time" step="1" id="gunIn" aria-label="Start time"><button id="gunReset">Reset</button>
       <span class="lab" style="margin-left:10px">Sequence</span><div class="seg" id="seqSeg"><button data-v="3">3 min</button><button data-v="2">2 min</button></div></div>
     <div class="tablewrap">
-      <table><thead><tr><th>Athlete</th><th class="num">Distance sailed</th><th class="num">Time</th><th class="num">Avg speed</th><th class="num">Extra vs shortest</th><th class="num">Start → mark 1</th><th>From</th></tr></thead><tbody id="distRows"></tbody></table>
+      <table><thead><tr><th>Athlete</th><th class="num">Total</th><th class="num">Avg speed</th><th class="num">Start → Mark 1</th><th class="num">Mark 1 → Mark 2</th></tr></thead><tbody id="distRows"></tbody></table>
     </div>
     <div class="note" id="distNote">Distance sailed from the moment each rider crosses the start line (or the gun, if the line is unknown) to the end of the race (coach’s finish, detected end or the Race length you choose) — everyone over the same time, so more metres = faster. Start → mark 1: metres sailed from the line crossing to mark 1, against the straight-line distance; the % is how efficient the first leg was (100% = straight line, upwind legs are naturally lower because of tacking). With a time range selected, only that stretch is counted. Extra vs shortest: how much more water a rider covered than the one who sailed the least, a sign of extra manoeuvres, wide roundings or a longer route.</div>
     <h3 class="hsec" style="margin-top:6px">Start</h3>
@@ -375,7 +375,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="note">The coach’s sheet sets, for every race, the start (and finish) time, sequence, wind and — if the coach logged them — pin, committee boat and mark 1. Paste the text from the coach page and press <b>Read sheet</b>, or just type the races in the table. If there was no coach, leave this empty and type the wind in the wind box at the top.</div>
       <textarea id="shText" rows="6" placeholder="Paste the coach's session sheet here" style="width:100%;resize:vertical"></textarea>
       <div class="bar"><button id="shRead" class="primary">Read &amp; save sheet</button><button id="shAdd">+ Add race</button><span style="flex:1"></span><span class="note" id="shMsg"></span></div>
-      <div class="tablewrap"><table><thead><tr><th>Race</th><th>Start</th><th>Finish</th><th>Seq.</th><th>Wind °</th><th>Pin lat, lon</th><th>Committee lat, lon</th><th>Mark 1 lat, lon</th><th>Note</th><th></th></tr></thead><tbody id="shRows"></tbody></table></div>
+      <div class="tablewrap"><table><thead><tr><th>Race</th><th>Start</th><th>Finish</th><th>Seq.</th><th>Wind °</th><th>Pin lat, lon</th><th>Committee lat, lon</th><th>Mark 1 lat, lon</th><th>Mark 2 lat, lon</th><th>Note</th><th></th></tr></thead><tbody id="shRows"></tbody></table></div>
       <div class="bar"><button id="shSave" class="primary">Save for the team</button><button id="shDel">Remove sheet</button><span class="note">Saved sheets replace the races of that day for everyone.</span></div>
     </div>
   </section>
@@ -448,6 +448,7 @@ function prepRace(src,day,from){const r=Object.assign({},src,{day,from});r.key=d
   r.P=r.C=r.M=null;
   if(okPt(r.pin)&&okPt(r.cmt)&&okPt(r.reach)){r.P=xy(r.pin);r.C=xy(r.cmt);r.M=xy(r.reach);
     r.L=len(sub(r.C,r.P));if(r.L<1){r.P=r.C=r.M=null;return r;}r.dP=len(sub(r.M,r.P)); r.dC=len(sub(r.M,r.C));
+    r.M2=okPt(r.mark2)?xy(r.mark2):null;
     r.courseSign=Math.sign(crs(sub(r.C,r.P),sub(r.M,r.P)))||1;
     const v=sub(r.C,r.P); const n={x:-v.y/r.L,y:v.x/r.L}; r.nv=dot(n,sub(r.M,r.P))>0?n:{x:-n.x,y:-n.y};}
   return r;}
@@ -735,7 +736,7 @@ function draw(){
     ctx.strokeStyle=fg;ctx.lineWidth=2.5*d;ctx.setLineDash([10*d,7*d]);ctx.beginPath();ctx.moveTo(P.x,P.y);ctx.lineTo(C.x,C.y);ctx.stroke();ctx.setLineDash([]);
     const mark=(q,col,lab,sq,dy)=>{ctx.fillStyle=col;ctx.shadowColor=col;ctx.shadowBlur=isDark()?14*d:0;if(sq){ctx.beginPath();ctx.roundRect(q.x-7*d,q.y-7*d,14*d,14*d,3*d);ctx.fill();}else{ctx.beginPath();ctx.arc(q.x,q.y,7*d,0,7);ctx.fill();}ctx.shadowBlur=0;
       ctx.font=`700 ${11*d}px ${css('--txt')}`;ctx.textAlign='center';ctx.fillText(lab,q.x,q.y+dy*d);};
-    mark(P,css('--pin'),'PIN',false,22);mark(C,css('--cmt'),'COMMITTEE',true,22);mark(M,css('--mark'),'MARK 1',false,-14);
+    mark(P,css('--pin'),'PIN',false,22);mark(C,css('--cmt'),'COMMITTEE',true,22);mark(M,css('--mark'),'MARK 1',false,-14);if(r.M2)mark(scr(r.M2),'#F472B6','MARK 2',false,22);
     if(!race){ctx.fillStyle=mut;ctx.font=`600 ${11*d}px ${css('--txt')}`;ctx.fillText('R'+r.n+' course',M.x,M.y-28*d);}
     ctx.globalAlpha=1;}
   // tracks: older history thin and faint, recent trail thick and fading with age
@@ -902,7 +903,7 @@ $('hNewForm').addEventListener('submit',async ev=>{ev.preventDefault();const d=$
   let dd=d,races=null,info='';const txt=$('hNewSheet').value.trim();
   if(txt){const res=parseSheet(txt);if(!res.races.length){$('hNewMsg').textContent='No races found in the pasted text (look for R1, R2…).';return;}
     if(res.day&&res.day!==d){dd=res.day;info=' (date taken from the coach text: '+fmtDay(dd)+')';}
-    races=res.races.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun,end:r.end||null,seq:+r.seq||3,wind:r.wind==null?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
+    races=res.races.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun,end:r.end||null,seq:+r.seq||3,wind:r.wind==null?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,mark2:okPt(r.mark2)?r.mark2:null,windNote:String(r.windNote||'').slice(0,120)}));
     info=' with '+races.length+' race'+(races.length===1?'':'s')+info;}
   const cur=sheets[dd]||{races:[]};const doc=Object.assign({},cur,{races:races||cur.races||[],name:n||cur.name||'',updated:Date.now(),author:cur.author||myId||null});if(txt){const cl=parseSheet(txt).coachLog;if(cl.length)doc.coachLog=cl;}
   try{if(logMode==='db')await dbRef.doc('sheets/'+dd).set(doc);sheets[dd]=doc;store.set('sheets',sheets);rebuildRaces();cache.clear();$('hNewName').value='';$('hNewSheet').value='';$('hNewMsg').textContent='Event created ✓'+info;renderHome();renderDays();}
@@ -1106,19 +1107,29 @@ function renderPol(){const c=$('polar'),g=c.getContext('2d'),d=devicePixelRatio|
     const r=document.createElement('tr');r.innerHTML=`<td>${dotH(tr.color)}${esc(tr.name)}</td><td class="num">${f1(bu)} kn VMG</td><td class="num">${bua==null?'—':bua+'°'}</td><td class="num">${f1(bd)} kn VMG</td><td class="num">${bda==null?'—':bda+'°'}</td>`;tb.appendChild(r);});}
 
 /* ---- start ---- */
+function legTimes(tr,r,a){const g=gunMs(r),rs=tr.rs,out={tc:a.cross!=null?g+a.cross*1000:null,t1:null,t2:null,auto2:false};
+  if(!geo(r)||out.tc==null)return out;
+  const near=(P,from,maxS)=>{let best=1e9,bt=null;for(let t=from;t<from+maxS*1000;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n)break;if(!rs.OK[i])continue;const d=Math.hypot(rs.X[i]-P.x,rs.Y[i]-P.y);if(d<best){best=d;bt=t;}if(best<30&&d>best+15)break;}return best<80?bt:null;};
+  out.t1=near(r.M,out.tc,900);if(out.t1==null)return out;
+  if(r.M2){out.t2=near(r.M2,out.t1+20000,900);}
+  else{const w=r.wind;let up=0;for(let t=out.t1+30000;t<out.t1+900000;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n)break;if(!rs.OK[i]||rs.V[i]<1.5){up=0;continue;}if(twa(rs.H[i],w)<80){if(++up>=15){out.t2=t-14000;out.auto2=true;break;}}else up=0;}}
+  return out;}
 function renderDist(){const tb=$('distRows');tb.innerHTML='';
-  if(!race){tb.innerHTML='<tr><td colspan="7" class="note">Pick a race (R1, R2…) to see the distance sailed.</td></tr>';return;}
-  const g=gunMs(race),w=aw();
-  const rows=visTracks().map(tr=>{const a=analyzeStart(tr,race);let t0=a.cross!=null?g+a.cross*1000:g,from=a.cross!=null?'line crossing':'gun';
-    if(rng){t0=Math.max(t0,w.t0);from='range start';}const rs=tr.rs,t1=w.t1;let d=0,sec=0;
-    const sail=(ta,tb)=>{let x=0;for(let t=Math.ceil(ta/1000)*1000;t<tb;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n-1)continue;if(rs.OK[i]&&rs.OK[i+1])x+=Math.hypot(rs.X[i+1]-rs.X[i],rs.Y[i+1]-rs.Y[i]);}return x;};
-    let leg=null;if(geo(race)&&a.cross!=null&&a.mark!=null){const tc=g+a.cross*1000,tm=g+a.mark*1000,pc=posAt(tr,tc);if(pc&&tm>tc){const sd=sail(tc,tm),dd=Math.hypot(race.M.x-pc.x,race.M.y-pc.y);leg={sd,dd,eff:dd/sd};}}
-    for(let t=Math.ceil(t0/1000)*1000;t<t1;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n-1)continue;if(rs.OK[i]&&rs.OK[i+1]){d+=Math.hypot(rs.X[i+1]-rs.X[i],rs.Y[i+1]-rs.Y[i]);sec++;}}
-    return {tr,d,sec,from,leg};}).filter(r=>r.sec>20);
-  if(!rows.length){tb.innerHTML='<tr><td colspan="7" class="note">No track data in this race.</td></tr>';return;}
-  const min=Math.min(...rows.map(r=>r.d));rows.sort((a,b)=>a.d-b.d);
-  rows.forEach(r=>{const ex=r.d-min,tr_=document.createElement('tr');
-    tr_.innerHTML=`<td>${dotH(r.tr.color)}${esc(r.tr.name)}</td><td class="num"><b>${r.d>=1000?f1(r.d/1000)+' km':f0(r.d)+' m'}</b></td><td class="num">${fmtRel(r.sec).replace('+','')}</td><td class="num">${f1(r.d/r.sec*KN)} kn</td><td class="num">${ex<1?'<span class="good">shortest</span>':'+'+f0(ex)+' m ('+f0(ex/min*100)+'%)'}</td><td class="num">${r.leg?f0(r.leg.sd)+' m <span class="note">for '+f0(r.leg.dd)+' m direct · '+Math.round(r.leg.eff*100)+'%</span>':'—'}</td><td class="note">${r.from}</td>`;tb.appendChild(tr_);});}
+  if(!race){tb.innerHTML='<tr><td colspan="6" class="note">Pick a race (R1, R2…) to see the distances.</td></tr>';return;}
+  const g=gunMs(race),w=aw();let anyAuto=false;
+  const rows=visTracks().map(tr=>{const a=analyzeStart(tr,race),rs=tr.rs;const L=legTimes(tr,race,a);
+    const sail=(ta,tb)=>{if(ta==null||tb==null||tb<=ta)return null;let x=0;for(let t=Math.ceil(ta/1000)*1000;t<tb;t+=1000){const i=ri(rs,t);if(i<0||i>=rs.n-1)continue;if(rs.OK[i]&&rs.OK[i+1])x+=Math.hypot(rs.X[i+1]-rs.X[i],rs.Y[i+1]-rs.Y[i]);}return x;};
+    let t0=L.tc!=null?L.tc:g;if(rng)t0=Math.max(t0,w.t0);const tot=sail(t0,w.t1),sec=Math.max(0,Math.round((w.t1-t0)/1000));
+    const up=sail(L.tc,L.t1),dn=sail(L.t1,L.t2);if(L.auto2)anyAuto=true;
+    const pc=L.tc!=null?posAt(tr,L.tc):null,upD=pc&&geo(race)?Math.hypot(race.M.x-pc.x,race.M.y-pc.y):null,dnD=race.M2&&geo(race)?Math.hypot(race.M2.x-race.M.x,race.M2.y-race.M.y):null;
+    return {tr,tot,sec,up,dn,upT:L.t1&&L.tc?(L.t1-L.tc)/1000:null,dnT:L.t2&&L.t1?(L.t2-L.t1)/1000:null,upD,dnD,auto2:L.auto2};}).filter(r=>r.tot!=null&&r.sec>20);
+  if(!rows.length){tb.innerHTML='<tr><td colspan="6" class="note">No track data in this race.</td></tr>';return;}
+  const best=k=>{const v=rows.map(r=>r[k]).filter(x=>x!=null);return v.length?Math.min(...v):null;};const bU=best('upT'),bD=best('dnT');
+  const cell=(d,tm,direct,bt,auto)=>d==null?'—':`<b>${f0(d)} m</b> <span class="note">${tm!=null?fmtRel(tm).replace('+',''):''}${direct?' · '+Math.round(direct/d*100)+'% eff.':''}${auto?' · auto':''}</span>${tm!=null&&bt!=null&&rows.length>1?(tm===bt?' <span class="good">fastest</span>':' <span class="note">+'+f0(tm-bt)+' s</span>'):''}`;
+  rows.sort((a,b)=>(a.upT??1e9)-(b.upT??1e9));
+  rows.forEach(r=>{const tr_=document.createElement('tr');
+    tr_.innerHTML=`<td>${dotH(r.tr.color)}${esc(r.tr.name)}</td><td class="num"><b>${r.tot>=1000?f1(r.tot/1000)+' km':f0(r.tot)+' m'}</b> <span class="note">${fmtRel(r.sec).replace('+','')}</span></td><td class="num">${f1(r.tot/r.sec*KN)} kn</td><td class="num">${cell(r.up,r.upT,r.upD,bU)}</td><td class="num">${cell(r.dn,r.dnT,r.dnD,bD,r.auto2)}</td>`;tb.appendChild(tr_);});
+  $('distNote').innerHTML='<b>Total</b>: metres from the start-line crossing to the end of the race (same time for everyone, so more metres = faster). <b>Start → Mark 1</b>: metres from the line to mark 1, with time and efficiency (straight-line distance ÷ metres sailed; upwind it is naturally below 100% because of tacking). <b>Mark 1 → Mark 2</b>: metres from mark 1 to mark 2.'+(race.M2?'':' <span class="warn">No mark 2 in the session sheet: the end of the run is taken where each rider turns back upwind (marked “auto”). Log mark 2 on the coach page for exact numbers.</span>');}
 function renderStart(){renderDist();const tb=$('res');tb.innerHTML='';$('gunBar').hidden=!race;
   $('seqSeg').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',!!race&&+b.dataset.v===seqOf(race)));
   if(!race){tb.innerHTML='<tr><td colspan="7" class="note">Pick a race (R1, R2…) to see the start analysis.</td></tr>';return;}
@@ -1249,14 +1260,14 @@ function parseSheet(txt){const parts0=txt.split(/\n\s*(?:Registro|Log)\s*:?\s*\n
     if(st)r.gun=fix(st[1]);else if(sg)r.gun=addMin(fix(sg[1]),r.seq);else{const any=p.match(/\b(\d{1,2}:\d{2}:\d{2})\b/);if(any)r.gun=fix(any[1]);}
     const w=p.match(/(?:vento|wind|twd)\s*[:=]?\s*(\d{1,3}(?:[.,]\d+)?)\s*°?/i);if(w)r.wind=parseFloat(w[1].replace(',','.'));
     const pos=re=>{const m=p.match(new RegExp('(?:'+re+')[^\\n]*?(-?\\d{1,2}[.,]\\d{3,})\\s*[,;/ ]\\s*(-?\\d{1,3}[.,]\\d{3,})','i'));if(!m)return null;const q={lat:parseFloat(m[1].replace(',','.')),lon:parseFloat(m[2].replace(',','.'))};return okPt(q)?q:null;};
-    r.pin=pos('\\bpin');r.cmt=pos('comitato|committee|barca\\s*giuria|\\bcb\\b');r.reach=pos('boa\\s*1|mark\\s*1|boa\\s*di\\s*lasco|\\bboa1|\\bboa\\b');
+    r.pin=pos('\\bpin');r.cmt=pos('comitato|committee|barca\\s*giuria|\\bcb\\b');r.reach=pos('boa\\s*1|mark\\s*1|boa\\s*di\\s*lasco|boa\\s*di\\s*bolina|\\bboa1|\\bboa\\b(?!\\s*2)(?!\\s*di\\s*poppa)');r.mark2=pos('boa\\s*2|mark\\s*2|boa\\s*di\\s*poppa|leeward');
     const fn=p.match(/\b(?:finish|end|fine|arrivo)\w*\s*[:=]?\s*(?:at\s*|alle\s*|ore\s*)?(\d{1,2}[:.]\d{2}(?:[:.]\d{2})?)/i);if(fn)r.end=fix(fn[1]);
     const notes=[];const sh=p.match(/(?:shifting|oscill\w*|osc\.?)\s*([\d.,]+\s*[–-]\s*[\d.,]+)\s*°?/i);if(sh)notes.push('shifting '+sh[1].replace(/\s/g,'')+'°');
     else{const w2=p.match(/(?:vento|wind)\s*[:=]?\s*(\d{1,3})\s*°?\s*[–-]\s*(\d{1,3})/i);if(w2)notes.push('shifting '+w2[1]+'–'+w2[2]+'°');}
     const nt=p.match(/(?:note|nota)\s*[:=]\s*([^\n]+)/i);if(nt)notes.push(nt[1].trim());if(notes.length)r.windNote=notes.join(' · ').slice(0,120);
     byN.set(r.n,Object.assign(byN.get(r.n)||{},Object.fromEntries(Object.entries(r).filter(([k,v])=>v!=null))));});
   out.races=[...byN.values()].sort((a,b)=>a.n-b.n);return out;}
-function curSheetRaces(){const sh=sheets[day];if(sh&&sh.races)return sh.races.map(r=>Object.assign({},r));return BUILTIN.filter(r=>r.day===day).map(r=>({n:r.n,gun:r.gun,end:r.end||null,seq:r.seq||3,wind:r.wind,pin:r.pin,cmt:r.cmt,reach:r.reach,windNote:r.windNote||''}));}
+function curSheetRaces(){const sh=sheets[day];if(sh&&sh.races)return sh.races.map(r=>Object.assign({},r));return BUILTIN.filter(r=>r.day===day).map(r=>({mark2:r.mark2||null,n:r.n,gun:r.gun,end:r.end||null,seq:r.seq||3,wind:r.wind,pin:r.pin,cmt:r.cmt,reach:r.reach,windNote:r.windNote||''}));}
 function renderEvent(){$('evDel').hidden=!(window.IQ&&IQ.ok&&IQ.isStaff());$('evDay').value=$('evDay').value||day;const sh=sheets[$('evDay').value];if(document.activeElement!==$('evName'))$('evName').value=sh&&sh.name||'';
   $('evWhere').textContent=logMode==='db'?'shared with the team':'sign in to share it';}
 async function renderTeam(){const c=$('teamCard');if(!(window.IQ&&IQ.role==='admin')){c.hidden=true;return;}c.hidden=false;
@@ -1282,13 +1293,13 @@ function renderSetup(){renderEvent();renderTeam();if(shDay!==day||!shDraft){shDr
   shDraft.forEach((r,i)=>{const tr=document.createElement('tr');
     tr.innerHTML=`<td><input type="number" min="1" max="40" style="width:56px" data-k="n" value="${r.n||''}"></td><td><input type="time" step="1" data-k="gun" value="${r.gun||''}"></td><td><input type="time" step="1" data-k="end" value="${r.end||''}"></td>
       <td><select data-k="seq"><option value="3">3 min</option><option value="2">2 min</option></select></td><td><input type="number" step="any" min="0" max="359" style="width:70px" data-k="wind" value="${r.wind??''}"></td>
-      <td><input type="text" style="width:170px" data-k="pin" value="${llTxt(r.pin)}" placeholder="43.87, 8.05"></td><td><input type="text" style="width:170px" data-k="cmt" value="${llTxt(r.cmt)}"></td><td><input type="text" style="width:170px" data-k="reach" value="${llTxt(r.reach)}"></td>
+      <td><input type="text" style="width:170px" data-k="pin" value="${llTxt(r.pin)}" placeholder="43.87, 8.05"></td><td><input type="text" style="width:170px" data-k="cmt" value="${llTxt(r.cmt)}"></td><td><input type="text" style="width:170px" data-k="reach" value="${llTxt(r.reach)}"></td><td><input type="text" style="width:170px" data-k="mark2" value="${llTxt(r.mark2)}"></td>
       <td><input type="text" style="width:160px" data-k="windNote" value="${esc(r.windNote||'')}"></td><td><button class="jump">✕</button></td>`;
     tr.querySelector('select').value=String(r.seq||3);
     tr.querySelectorAll('[data-k]').forEach(inp=>inp.addEventListener('change',()=>{const k=inp.dataset.k,v=inp.value;
-      if(k==='n'||k==='seq')r[k]=+v;else if(k==='wind')r.wind=v===''?null:parseFloat(v);else if(['pin','cmt','reach'].includes(k)){r[k]=parseLL(v);if(v&&!r[k])inp.style.borderColor='var(--bad)';else inp.style.borderColor='';}else r[k]=v;}));
+      if(k==='n'||k==='seq')r[k]=+v;else if(k==='wind')r.wind=v===''?null:parseFloat(v);else if(['pin','cmt','reach','mark2'].includes(k)){r[k]=parseLL(v);if(v&&!r[k])inp.style.borderColor='var(--bad)';else inp.style.borderColor='';}else r[k]=v;}));
     tr.querySelector('.jump').onclick=()=>{shDraft.splice(i,1);renderSetup();};tb.appendChild(tr);});
-  if(!shDraft.length)tb.innerHTML='<tr><td colspan="10" class="note">No races. Paste the sheet or add races by hand.</td></tr>';
+  if(!shDraft.length)tb.innerHTML='<tr><td colspan="11" class="note">No races. Paste the sheet or add races by hand.</td></tr>';
   $('shSave').disabled=!canWrite&&logMode==='db';}
 $('shRead').onclick=async()=>{const txt=$('shText').value;if(!txt.trim()){$('shMsg').textContent='Paste the sheet first.';return;}const res=parseSheet(txt);
   if(!res.races.length){$('shMsg').textContent='No races found (look for “R1”, “R2”… in the text).';return;}
@@ -1297,7 +1308,7 @@ $('shRead').onclick=async()=>{const txt=$('shText').value;if(!txt.trim()){$('shM
   const msg=`Read ${res.races.length} race${res.races.length>1?'s':''}${res.day?' for '+fmtDay(res.day):''} and saved.`+(miss.length?' Check '+miss.join(', ')+': start or wind missing.':'');await saveSheet();$('shMsg').textContent=msg+' '+$('shMsg').textContent.replace(/^Saved/,'—');};
 $('shAdd').onclick=()=>{const last=shDraft[shDraft.length-1];shDraft.push({end:'',n:(last?last.n:0)+1,seq:last?last.seq:3,gun:'',wind:last?last.wind:null,pin:last?last.pin:null,cmt:last?last.cmt:null,reach:last?last.reach:null,windNote:''});renderSetup();};
 $('shSave').onclick=()=>saveSheet();
-async function saveSheet(){const races=shDraft.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.end?(r.end.length===5?r.end+':00':r.end):null,seq:+r.seq||3,wind:r.wind==null||!isFinite(r.wind)?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
+async function saveSheet(){const races=shDraft.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.end?(r.end.length===5?r.end+':00':r.end):null,seq:+r.seq||3,wind:r.wind==null||!isFinite(r.wind)?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,mark2:okPt(r.mark2)?r.mark2:null,windNote:String(r.windNote||'').slice(0,120)}));
   if(!races.length){$('shMsg').textContent='Each race needs a number and a start time.';return;}
   const prev=sheets[day]||{};const doc={races,updated:Date.now(),author:myId||null,name:prev.name||'',coachLog:(shLog&&shLog.length)?shLog:(prev.coachLog||[])};shLog=null;sheets[day]=doc;store.set('sheets',sheets);
   if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).set(doc);$('shMsg').textContent='Saved for the team.';}catch(e){$('shMsg').textContent='Not saved online ('+(e&&e.code||'error')+'), kept in this browser.';}}else $('shMsg').textContent='Saved in this browser only.';
