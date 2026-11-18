@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>IQtraining</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="team.js?v=3"></script>
+<script src="team.js?v=4"></script>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600&family=Public+Sans:wght@400;500;600;700&display=swap">
 <style>
 :root,[data-theme="dark"]{
@@ -413,32 +413,14 @@ const TZ='Europe/Rome', LOC='en-GB';
 /* ================= RACES ================= */
 const REACH={lat:43.875795,lon:8.048991};
 const P15={pin1:{lat:43.869572,lon:8.055463},cmt1:{lat:43.870155,lon:8.056486},pin2:{lat:43.869162,lon:8.054393},cmt2:{lat:43.870104,lon:8.056362},cmt3:{lat:43.869763,lon:8.056886},A:{lat:43.872880,lon:8.051561},B:{lat:43.873196,lon:8.052415},C:{lat:43.872932,lon:8.051331}};
-const BUILTIN=[
- {n:1,pin:{lat:43.871425,lon:8.049401},cmt:{lat:43.871171,lon:8.050577},wind:80,gun:'14:05:23',windNote:'shifting 60–80°'},
- {n:2,pin:{lat:43.871425,lon:8.049401},cmt:{lat:43.871516,lon:8.050751},wind:80,gun:'14:17:40',windNote:'not re-read'},
- {n:3,pin:{lat:43.871425,lon:8.049401},cmt:{lat:43.871298,lon:8.050804},wind:60,gun:'14:34:54',windNote:''},
- {n:4,pin:{lat:43.871425,lon:8.049401},cmt:{lat:43.871828,lon:8.050531},wind:50,gun:'15:22:12',windNote:''},
- {n:5,pin:{lat:43.871620,lon:8.051789},cmt:{lat:43.871945,lon:8.052799},wind:50,gun:'15:38:19',windNote:'not re-read · pin moved'},
- {n:1,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt1,reach:P15.A,wind:60,gun:'14:58:00',windNote:'pin taken from the tracks'},
- {n:2,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt2,reach:P15.A,wind:60,gun:'15:10:00',windNote:'pin moved'},
- {n:3,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt2,reach:P15.B,wind:57.5,gun:'15:20:00',windNote:'55–60° · mark 1 B corrected from tracks'},
- {n:4,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt3,reach:P15.B,wind:57.5,gun:'15:28:00',windNote:'55–60° · committee boat moved'},
- {n:5,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt3,reach:P15.B,wind:50,gun:'15:33:30',windNote:'start logged 15:33:00, everyone crosses 30 s later'},
- {n:6,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt3,reach:P15.B,wind:50,gun:'15:39:20',windNote:'wind not re-read'},
- {n:7,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt3,reach:P15.C,wind:62.5,gun:'15:50:00',windNote:'60–65° · mark 1 moved · time from tracks'},
- {n:8,day:'2026-11-15',pin:P15.pin2,cmt:P15.cmt3,reach:P15.C,wind:60,gun:'15:55:20',windNote:'time from tracks'},
- {n:1,day:'2026-11-17',pin:{lat:43.866825,lon:8.032361},cmt:{lat:43.86821,lon:8.030118},reach:{lat:43.861653,lon:8.023235},wind:220,gun:'10:19:44',seq:3,windNote:''},
- {n:2,day:'2026-11-17',pin:{lat:43.866998,lon:8.032299},cmt:{lat:43.867776,lon:8.02976},reach:{lat:43.8617,lon:8.022804},wind:210,gun:'10:30:36',seq:3,windNote:'start/committee to check'},
- {n:3,day:'2026-11-17',pin:{lat:43.866998,lon:8.032299},cmt:{lat:43.867708,lon:8.030785},reach:{lat:43.8617,lon:8.022804},wind:230,gun:'10:48:05',seq:3,windNote:'start/committee to check'},
- {n:4,day:'2026-11-17',pin:{lat:43.866998,lon:8.032299},cmt:{lat:43.867885,lon:8.030594},reach:{lat:43.861559,lon:8.022734},wind:220,gun:'11:09:43',end:'11:38:42',seq:3,windNote:''},
- {n:5,day:'2026-11-17',pin:{lat:43.866862,lon:8.032436},cmt:{lat:43.867597,lon:8.029834},reach:{lat:43.861486,lon:8.022684},wind:210,gun:'11:53:15',seq:3,windNote:''}
-];
+const BUILTIN=[];
 BUILTIN.forEach(r=>{r.day=r.day||'2026-11-14';r.reach=r.reach||REACH;});
 const RACES=[];
 const COLORS=['#38BDF8','#F472B6','#FACC15','#4ADE80','#A78BFA','#FB923C','#2DD4BF','#F87171'];
 const KN=1.94384;
 
 /* ================= storage ================= */
+try{if(localStorage.getItem('iq-ver')!=='2'){Object.keys(localStorage).filter(k=>k.startsWith('iq-')).forEach(k=>localStorage.removeItem(k));localStorage.setItem('iq-ver','2');}}catch(e){}
 const store={get(k,d){try{const v=localStorage.getItem('iq-'+k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set(k,v){try{localStorage.setItem('iq-'+k,JSON.stringify(v));return true;}catch(e){return false;}}};
 const gunOverrides=store.get('gun',{}), seqOverrides=store.get('seq',{}), dayWinds=store.get('dayWind',{}), names=store.get('names',{});
 let foilThr=store.get('foil',10);
