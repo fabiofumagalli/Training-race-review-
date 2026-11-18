@@ -535,6 +535,8 @@ function curGroup(){const gs=groupsOf(day);if(!gs.length)return null;return gs.f
 function racesOfDay(d){const rs=RACES.filter(r=>r.day===d);if(d!==day)return rs;const gs=groupsOf(d);if(gs.length<2)return rs;const g=curGroup();
   return rs.filter(r=>{const t=gunMs(r);return t>=g.t0-1200000&&t<=g.t1+1200000;});}
 const dayTracks=()=>{const g=curGroup();return g?g.members:[];};
+const sameTrack=(a,b)=>a!==b&&a.day===b.day&&Math.abs(a.tStart-b.tStart)<3000&&Math.abs(a.tEnd-b.tEnd)<3000;
+function dedupe(){const keep=[];tracks.forEach(t=>{const dup=keep.find(k=>sameTrack(k,t));if(!dup){keep.push(t);return;}if(t.shared&&!dup.shared)keep[keep.indexOf(dup)]=t;});if(keep.length!==tracks.length){tracks=keep;saveTracks();}}
 const visTracks=()=>dayTracks().filter(t=>t.visible);
 const fmtDay=d=>new Intl.DateTimeFormat(LOC,{day:'numeric',month:'short',timeZone:'UTC'}).format(Date.parse(d+'T12:00:00Z'));
 
@@ -1388,7 +1390,7 @@ document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,sele
 /* ================= files ================= */
 function saveTracks(){const data=tracks.filter(t=>!t.id.startsWith('pub-')).map(t=>({id:t.id,name:t.name,color:t.color,day:t.day,p:t.raw.map(p=>[Math.round(p.lat*1e6),Math.round(p.lon*1e6),p.t])}));
   if(!store.set('tracks',data))$('loadMsg').textContent='Tracks loaded, but this browser can’t remember them: you will need to load them again next time.';}
-function restoreTracks(){store.get('tracks',[]).forEach(d=>{const tr=addTrack(names[d.id]||d.name,d.p.map(a=>({lat:a[0]/1e6,lon:a[1]/1e6,t:a[2]})),{id:d.id,color:d.color,day:d.day});if(tr)tracks.push(tr);});}
+function restoreTracks(){setTimeout(dedupe,0);store.get('tracks',[]).forEach(d=>{const tr=addTrack(names[d.id]||d.name,d.p.map(a=>({lat:a[0]/1e6,lon:a[1]/1e6,t:a[2]})),{id:d.id,color:d.color,day:d.day});if(tr)tracks.push(tr);});}
 /* ---- shared tracks: compact delta encoding stored in the page database ---- */
 function encodeTrack(raw){let step=1000,pts;
   for(;;){pts=[];let last=-1e15;raw.forEach(p=>{if(p.t-last>=step){pts.push(p);last=p.t;}});
@@ -1405,7 +1407,7 @@ function onTracksSnap(snap){let ch=false;const ids=new Set();
     try{const tr=addTrack(String(v.name||'Rider').slice(0,60),decodeTrack(v.enc),{id,day:v.day,owner:v.owner||null,shared:true});if(!tr)return;
       if(ex){tr.visible=ex.visible;tracks=tracks.map(t=>t===ex?tr:t);}else tracks.push(tr);sharedSeen.set(id,ver);ch=true;}catch(e){}});
   const before=tracks.length;tracks=tracks.filter(t=>!t.id.startsWith('db-')||ids.has(t.id));if(tracks.length!==before)ch=true;
-  if(ch){cache.clear();if(!allDays().includes(day))day=allDays()[allDays().length-1];allRender();refit();draw();}}
+  if(ch){dedupe();cache.clear();if(!allDays().includes(day))day=allDays()[allDays().length-1];allRender();refit();draw();}}
 async function shareTrack(tr){const {enc,n}=encodeTrack(tr.raw);
   await dbRef.collection('tracks').doc().set({name:tr.name,day:tr.day,tStart:tr.tStart,tEnd:tr.tEnd,n,enc,owner:myId||null,created:Date.now()});}
 async function shareRename(tr,v){try{await dbRef.collection('tracks').doc(tr.id.slice(3)).update({name:v});}catch(e){$('loadMsg').textContent='Name not saved.';}}
@@ -1415,6 +1417,7 @@ async function setHidden(tr,on){const list=new Set(dayHide[tr.day]||[]);on?list.
   if(logMode==='db'&&canWrite){try{await dbRef.doc('days/'+tr.day).set({hide:dayHide[tr.day]});}catch(e){}}}
 async function loadFiles(files){const msgs=[];let added=0,lastDay=null,sharedN=0;const shareOn=logMode==='db'&&canWrite;
   for(const f of files){try{const txt=await f.text();const {name,pts}=parseFile(txt,f.name);const tr=addTrack(name,pts,{color:COLORS[tracks.length%COLORS.length]});if(!tr)throw new Error('too few points');
+    const ex=tracks.find(t=>sameTrack(t,tr));if(ex){msgs.push(f.name+': already loaded as “'+ex.name+'”');lastDay=tr.day;continue;}
     if(shareOn){try{await shareTrack(tr);sharedN++;lastDay=tr.day;added++;continue;}catch(e){msgs.push(f.name+': not shared ('+((e&&e.code)||'error')+'), kept in this browser');}}
     tracks.push(tr);added++;lastDay=tr.day;}
     catch(err){msgs.push(f.name+': '+err.message);}}
