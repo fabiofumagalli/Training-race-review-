@@ -886,7 +886,7 @@ $('hNewForm').addEventListener('submit',async ev=>{ev.preventDefault();const d=$
     if(res.day&&res.day!==d){dd=res.day;info=' (date taken from the coach text: '+fmtDay(dd)+')';}
     races=res.races.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun,end:r.end||null,seq:+r.seq||3,wind:r.wind==null?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
     info=' with '+races.length+' race'+(races.length===1?'':'s')+info;}
-  const cur=sheets[dd]||{races:[]};const doc=Object.assign({},cur,{races:races||cur.races||[],name:n||cur.name||'',updated:Date.now(),author:cur.author||myId||null});
+  const cur=sheets[dd]||{races:[]};const doc=Object.assign({},cur,{races:races||cur.races||[],name:n||cur.name||'',updated:Date.now(),author:cur.author||myId||null});if(txt){const cl=parseSheet(txt).coachLog;if(cl.length)doc.coachLog=cl;}
   try{if(logMode==='db')await dbRef.doc('sheets/'+dd).set(doc);sheets[dd]=doc;store.set('sheets',sheets);rebuildRaces();cache.clear();$('hNewName').value='';$('hNewSheet').value='';$('hNewMsg').textContent='Event created ✓'+info;renderHome();renderDays();}
   catch(e){$('hNewMsg').textContent='Not created: '+(e.message||e.code||'error');}});
 function renderHome(){renderNew();const IQx=window.IQ;const nm=IQx&&IQx.profile&&IQx.profile.name;
@@ -1201,11 +1201,12 @@ $('lCopy').addEventListener('click',async()=>{const list=filteredLog();const txt
   try{await navigator.clipboard.writeText(txt||'(empty log)');$('lCopy').textContent='Copied ✓';}catch(e){$('lCopy').textContent='Copy failed';}setTimeout(()=>$('lCopy').textContent='Copy log',2000);});
 
 /* ================= SESSION SHEET ================= */
-let shDraft=null, shDay=null;
+let shDraft=null, shDay=null, shLog=null;
 const llTxt=p=>okPt(p)?p.lat.toFixed(6)+', '+p.lon.toFixed(6):'';
 function parseLL(v){const m=String(v||'').match(/(-?\d{1,2}(?:[.,]\d+)?)\s*[,;/ ]\s*(-?\d{1,3}(?:[.,]\d+)?)/);if(!m)return null;const p={lat:parseFloat(m[1].replace(',','.')),lon:parseFloat(m[2].replace(',','.'))};return okPt(p)?p:null;}
 function addMin(hms,m){const a=hms.split(':').map(Number);let t=a[0]*3600+a[1]*60+(a[2]||0)+m*60;return [Math.floor(t/3600)%24,Math.floor(t/60)%60,t%60].map(x=>String(x).padStart(2,'0')).join(':');}
-function parseSheet(txt){txt=txt.split(/\n\s*(?:Registro|Log)\s*:/i)[0];const out={day:null,races:[]};
+function parseSheet(txt){const parts0=txt.split(/\n\s*(?:Registro|Log)\s*:?\s*\n/i);txt=parts0[0];const out={day:null,races:[],coachLog:[]};
+  if(parts0[1])parts0[1].split('\n').forEach(l=>{const m=l.trim().match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+R(\d+)\s*[·\-–:]?\s*(.+)$/);if(m)out.coachLog.push({t:m[1],r:+m[2],txt:m[3].slice(0,200)});});
   const dm=txt.match(/\b(20\d\d)-(\d\d)-(\d\d)\b/);if(dm)out.day=dm[0];else{const m2=txt.match(/\b(\d{1,2})[\/.](\d{1,2})[\/.](20\d\d|\d\d)\b/);if(m2){const y=m2[3].length===2?'20'+m2[3]:m2[3];out.day=`${y}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;}}
   const parts=txt.split(/(?=(?:^|\n|\s)(?:R\s?\d{1,2}\b|(?:Regata|Race)\s*\d{1,2}\b))/i);
   const byN=new Map();
@@ -1260,13 +1261,13 @@ function renderSetup(){renderEvent();renderTeam();if(shDay!==day||!shDraft){shDr
 $('shRead').onclick=async()=>{const txt=$('shText').value;if(!txt.trim()){$('shMsg').textContent='Paste the sheet first.';return;}const res=parseSheet(txt);
   if(!res.races.length){$('shMsg').textContent='No races found (look for “R1”, “R2”… in the text).';return;}
   if(res.day&&res.day!==day){day=res.day;grp=null;}
-  shDraft=res.races;shDay=day;const miss=res.races.filter(r=>!r.gun||r.wind==null).map(r=>'R'+r.n);
+  shDraft=res.races;shDay=day;shLog=res.coachLog;const miss=res.races.filter(r=>!r.gun||r.wind==null).map(r=>'R'+r.n);
   const msg=`Read ${res.races.length} race${res.races.length>1?'s':''}${res.day?' for '+fmtDay(res.day):''} and saved.`+(miss.length?' Check '+miss.join(', ')+': start or wind missing.':'');await saveSheet();$('shMsg').textContent=msg+' '+$('shMsg').textContent.replace(/^Saved/,'—');};
 $('shAdd').onclick=()=>{const last=shDraft[shDraft.length-1];shDraft.push({end:'',n:(last?last.n:0)+1,seq:last?last.seq:3,gun:'',wind:last?last.wind:null,pin:last?last.pin:null,cmt:last?last.cmt:null,reach:last?last.reach:null,windNote:''});renderSetup();};
 $('shSave').onclick=()=>saveSheet();
 async function saveSheet(){const races=shDraft.filter(r=>r.n&&r.gun).map(r=>({n:+r.n,gun:r.gun.length===5?r.gun+':00':r.gun,end:r.end?(r.end.length===5?r.end+':00':r.end):null,seq:+r.seq||3,wind:r.wind==null||!isFinite(r.wind)?null:r.wind,pin:okPt(r.pin)?r.pin:null,cmt:okPt(r.cmt)?r.cmt:null,reach:okPt(r.reach)?r.reach:null,windNote:String(r.windNote||'').slice(0,120)}));
   if(!races.length){$('shMsg').textContent='Each race needs a number and a start time.';return;}
-  const doc={races,updated:Date.now(),author:myId||null,name:(sheets[day]&&sheets[day].name)||''};sheets[day]=doc;store.set('sheets',sheets);
+  const prev=sheets[day]||{};const doc={races,updated:Date.now(),author:myId||null,name:prev.name||'',coachLog:(shLog&&shLog.length)?shLog:(prev.coachLog||[])};shLog=null;sheets[day]=doc;store.set('sheets',sheets);
   if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).set(doc);$('shMsg').textContent='Saved for the team.';}catch(e){$('shMsg').textContent='Not saved online ('+(e&&e.code||'error')+'), kept in this browser.';}}else $('shMsg').textContent='Saved in this browser only.';
   rebuildRaces();cache.clear();const rs=racesOfDay(day);selectRace(rs.length?rs[0]:null);showPanel('setup');}
 $('shDel').onclick=async()=>{if(!sheets[day])return;delete sheets[day];store.set('sheets',sheets);if(logMode==='db'&&canWrite){try{await dbRef.doc('sheets/'+day).delete();}catch(e){}}

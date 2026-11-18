@@ -400,6 +400,7 @@ function summary(){const f=p=>p?p.lat.toFixed(6)+', '+p.lon.toFixed(6)+(p.acc?' 
     out.push('wind '+(r.wind==null?'?':r.wind+'°')+(r.windTo!=null?` (shifting ${r.wind}–${r.windTo}°)`:''));
     if(r.pin)out.push('pin '+f(r.pin));if(r.cmt)out.push('committee '+f(r.cmt));if(r.reach)out.push('mark 1 '+f(r.reach));
     if(r.note)out.push('note: '+r.note.replace(/\s+/g,' '));});
+  if(S.log&&S.log.length){out.push('');out.push('Log:');S.log.forEach(e=>out.push(`${e.t} R${e.r} · ${String(e.txt).replace(/\s+/g,' ')}`));}
   return out.join('\n');}
 $('finBtn').onclick=()=>{const r=race(),t=clock(new Date());r.finish=t;logIt('FINE '+t);changed();toast('Fine R'+r.n+' · '+t);if(navigator.vibrate)try{navigator.vibrate(80);}catch(e){}};
 $('fin').addEventListener('change',e=>{const v=e.target.value;if(!v)return;const r=race(),t=v.length===5?v+':00':v;if(t===r.finish)return;r.finish=t;logIt('fine scritta a mano: '+t);changed();});
