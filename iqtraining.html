@@ -353,7 +353,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
   <section class="panel" id="p-setup" role="tabpanel" hidden>
     <div class="card">
       <h2>Event <small id="evWhere"></small></h2>
-      <div class="bar"><span class="lab">Day</span><input type="date" id="evDay"><span class="lab">Name / place</span><input type="text" id="evName" placeholder="e.g. Imperia – training" style="min-width:200px"><button id="evSave" class="primary">Create / rename event</button><span class="note" id="evMsg"></span></div>
+      <div class="bar"><span class="lab">Day</span><input type="date" id="evDay"><span class="lab">Name / place</span><input type="text" id="evName" placeholder="e.g. Imperia – training" style="min-width:200px"><button id="evSave" class="primary">Create / rename event</button><button id="evDel">🗑 Delete event</button><span class="note" id="evMsg"></span></div>
       <div class="note">An event is a training day. Create it before going out (or the coach page creates it when the coach signs in and logs the first race). Riders then sign in, open the day and load their tracks: everyone in the team sees all of them.</div>
     </div>
     <div class="card" id="teamCard" hidden>
@@ -876,7 +876,19 @@ function sessCard(dd){const i=dayInfo(dd),dt=new Date(dd+'T12:00:00Z');const b=d
   add(i.names.length?i.names.length+' rider'+(i.names.length>1?'s':''):'no tracks yet');if(i.nr)add(i.nr+' race'+(i.nr>1?'s':''));
   if(i.t0)add(fmtHM(i.t0)+'–'+fmtHM(i.t1));if(i.mine)add('✓ your track','var(--good)');
   if(i.names.length){const n=document.createElement('span');n.textContent=i.names.slice(0,5).join(', ')+(i.names.length>5?'…':'');mt.appendChild(n);}
-  b.onclick=()=>openDay(dd);return b;}
+  b.onclick=()=>openDay(dd);
+  if(window.IQ&&IQ.ok&&IQ.isStaff()){const w=document.createElement('div');w.style.cssText='display:flex;flex-direction:column;gap:4px';const del=document.createElement('button');del.className='x';del.textContent='🗑 Delete event';del.style.cssText='font-size:11.5px;min-height:28px;align-self:flex-end';
+    del.onclick=ev=>{ev.stopPropagation();deleteEvent(dd,del);};w.append(b,del);return w;}
+  return b;}
+async function deleteEvent(dd,btn){const i=dayInfo(dd);const ownTracks=tracks.filter(t=>t.day===dd&&t.shared);const logs=logDocs.filter(e=>e.day===dd);
+  if(!btn.dataset.c){btn.dataset.c=1;btn.classList.add('bad');btn.textContent=`Delete event, ${ownTracks.length} track${ownTracks.length===1?'':'s'} and ${logs.length} log entr${logs.length===1?'y':'ies'}? Tap again`;
+    setTimeout(()=>{if(btn.isConnected){delete btn.dataset.c;btn.classList.remove('bad');btn.textContent='🗑 Delete event';}},5000);return;}
+  btn.disabled=true;btn.textContent='Deleting…';
+  try{if(logMode==='db'){for(const t of ownTracks)await dbRef.collection('tracks').doc(t.id.slice(3)).delete();for(const e of logs)await dbRef.collection('log').doc(e.id).delete();
+      await dbRef.doc('sheets/'+dd).delete();try{await dbRef.doc('days/'+dd).delete();}catch(e){}}
+    tracks=tracks.filter(t=>t.day!==dd);delete sheets[dd];store.set('sheets',sheets);saveTracks();rebuildRaces();cache.clear();
+    if(location.hash==='#d-'+dd)location.hash='home';else renderHome();}
+  catch(e){btn.disabled=false;btn.textContent='Not deleted: '+(e.message||e.code||'error');}}
 function renderNew(){const IQx=window.IQ,f=$('hNewForm'),m=$('hNewMsg');if(!$('hNewDay').value)$('hNewDay').value=todayStr();
   const can=IQx&&IQx.ok&&IQx.isStaff();f.querySelectorAll('input,button').forEach(x=>x.disabled=!can);
   if(!IQx||!IQx.user)m.textContent='Sign in (top) to create events.';else if(!can)m.textContent='Only coaches and the admin create events.';else if(m.textContent.startsWith('Sign in')||m.textContent.startsWith('Only'))m.textContent='';}
@@ -1226,7 +1238,7 @@ function parseSheet(txt){const parts0=txt.split(/\n\s*(?:Registro|Log)\s*:?\s*\n
     byN.set(r.n,Object.assign(byN.get(r.n)||{},Object.fromEntries(Object.entries(r).filter(([k,v])=>v!=null))));});
   out.races=[...byN.values()].sort((a,b)=>a.n-b.n);return out;}
 function curSheetRaces(){const sh=sheets[day];if(sh&&sh.races)return sh.races.map(r=>Object.assign({},r));return BUILTIN.filter(r=>r.day===day).map(r=>({n:r.n,gun:r.gun,end:r.end||null,seq:r.seq||3,wind:r.wind,pin:r.pin,cmt:r.cmt,reach:r.reach,windNote:r.windNote||''}));}
-function renderEvent(){$('evDay').value=$('evDay').value||day;const sh=sheets[$('evDay').value];if(document.activeElement!==$('evName'))$('evName').value=sh&&sh.name||'';
+function renderEvent(){$('evDel').hidden=!(window.IQ&&IQ.ok&&IQ.isStaff());$('evDay').value=$('evDay').value||day;const sh=sheets[$('evDay').value];if(document.activeElement!==$('evName'))$('evName').value=sh&&sh.name||'';
   $('evWhere').textContent=logMode==='db'?'shared with the team':'sign in to share it';}
 async function renderTeam(){const c=$('teamCard');if(!(window.IQ&&IQ.role==='admin')){c.hidden=true;return;}c.hidden=false;
   const tb=$('teamRows');const list=await IQ.team();tb.innerHTML='';
@@ -1239,6 +1251,7 @@ $('impPub').onclick=async()=>{if(logMode!=='db'){$('impMsg').textContent='Sign i
   $('impMsg').textContent='Done: '+n+' tracks copied'+(skip?', '+skip+' already there':'')+'. Tell Claude, and the public copies will be removed from the site.';$('impPub').disabled=false;};
 function alertMsg(t){$('evMsg').textContent=t;}
 $('evDay').addEventListener('change',renderEvent);
+$('evDel').onclick=()=>deleteEvent($('evDay').value||day,$('evDel'));
 $('evSave').onclick=async()=>{const d=$('evDay').value,n=$('evName').value.trim().slice(0,80);if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){alertMsg('Pick a day.');return;}
   const cur=sheets[d]||{races:[]};const doc=Object.assign({},cur,{name:n,updated:Date.now(),author:cur.author||myId||null});sheets[d]=doc;store.set('sheets',sheets);
   if(logMode==='db'){try{await dbRef.doc('sheets/'+d).set(doc);alertMsg('Event saved for the team.');}catch(e){alertMsg('Not saved online: '+(e.message||e.code||'error'));}}else alertMsg('Saved in this browser only (sign in to share).');
