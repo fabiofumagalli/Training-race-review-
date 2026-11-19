@@ -258,7 +258,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
           <select id="colorMode" aria-label="Track colour"><option value="ath">Colour: athlete</option><option value="spd">Colour: speed</option></select>
           <span class="lab">Trail</span><div class="seg" id="trailSeg" role="group" aria-label="Trail length"><button data-v="30">30 s</button><button data-v="60">1 min</button><button data-v="180">3 min</button><button data-v="0">All</button></div>
           <select id="focus" aria-label="Highlight one rider"><option value="">Highlight: everyone</option></select>
-          <button id="dataAll" title="Show or hide speed, TWA and course for every athlete">Data: all</button>
+          <button id="ladderBtn" title="Lines perpendicular to the wind through each rider: who is ahead">Ladder</button><button id="mode3dBtn" title="3D view: height = speed">3D</button><button id="dataAll" title="Show or hide speed, TWA and course for every athlete">Data: all</button>
           <select id="follow" aria-label="Follow an athlete"><option value="">Follow: off</option></select>
         </div>
         <div class="miniplay"><button class="play" id="mPlay" aria-label="Play">▶</button><span class="t" id="mRel"></span><input type="range" id="mScrub" aria-label="Time"></div>
@@ -529,6 +529,8 @@ let view={cx:0,cy:0,s:1};
 let selMan=null, pubLoading=true;
 let rng=null, zoom=false, chartMode='scrub';
 let trailSec=store.get('trail',60), follow='';
+let ladderOn=store.get('ladder',true), mode3d=false;
+const cam={yaw:0,pitch:.55,dist:900,cx:0,cy:0,ok:false};
 const dataOn=new Set(store.get('dataOn',[]));
 let focusId=store.get('focus','');
 const focusOK=()=>focusId&&visTracks().some(t=>t.id===focusId)?focusId:'';
@@ -720,7 +722,71 @@ function dataCard(x,y,tr,kn,twaTxt,cog,d){const W=150*d,H=54*d;
   ctx.textAlign='left';ctx.fillStyle=css('--fg');ctx.font=`700 ${11*d}px ${css('--txt')}`;ctx.fillText(tr.name,x+10*d,y-H/2+15*d);
   const col=(lab,val,cx,c)=>{ctx.fillStyle=css('--muted');ctx.font=`700 ${8*d}px ${css('--txt')}`;ctx.fillText(lab,cx,y+4*d);ctx.fillStyle=c||css('--fg');ctx.font=`500 ${17*d}px ${css('--num')}`;ctx.fillText(val,cx,y+21*d);};
   col('KN',kn.toFixed(1),x+10*d,kn>=foilThr?css('--foil'):null);col('TWA',twaTxt,x+56*d,css('--wind'));col('COG',cog+'°',x+104*d);}
-function draw(){
+/* ---- wind ladder: progress measured along the wind, perpendicular lines show who is ahead ---- */
+function ladderRank(t){const w=windAt(t),u={x:Math.sin(rad(w)),y:Math.cos(rad(w))},r=refRace();const out=[];
+  visTracks().forEach(tr=>{const h=posAt(tr,t);if(!h)return;const along=h.x*u.x+h.y*u.y;let leg=0,dir=1;
+    if(geo(r)&&race){const L=legTimes(tr,r,analyzeStart(tr,r));if(L.t1&&t>=L.t1){leg=1;dir=-1;}if(L.t2&&t>=L.t2){leg=2;dir=1;}}
+    else{const st=steady(tr,t);if(st&&twa(st.hdg,w)>100)dir=-1;}
+    out.push({tr,h,along,leg,dir,score:leg*1e6+dir*along});});
+  const groups={};out.forEach(o=>{const k=o.leg+'|'+o.dir;(groups[k]=groups[k]||[]).push(o);});
+  Object.values(groups).forEach(g=>{const best=Math.max(...g.map(o=>o.dir*o.along));g.forEach(o=>o.gap=best-o.dir*o.along);});
+  out.sort((a,b)=>b.score-a.score);out.forEach((o,i)=>o.pos=i+1);return {u,list:out};}
+function drawLadder(t,d){const {u,list}=ladderRank(t);if(!list.length)return;const p={x:u.y,y:-u.x},W=cv.width,H=cv.height,half=(W+H)/view.s;
+  const line=(c,col,alpha,lw,dash)=>{const a=scr({x:c.x-p.x*half,y:c.y-p.y*half}),b=scr({x:c.x+p.x*half,y:c.y+p.y*half});ctx.strokeStyle=col;ctx.globalAlpha=alpha;ctx.lineWidth=lw*d;ctx.setLineDash(dash.map(x=>x*d));ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;};
+  // background rungs every "nice" metres around the fleet
+  const step=[25,50,100,200,500].find(n=>n*view.s>40*d)||500,mid=list.reduce((a,o)=>a+o.along,0)/list.length;
+  for(let k=-8;k<=8;k++){const al=Math.round(mid/step)*step+k*step;line({x:u.x*al,y:u.y*al},css('--wind'),.10,1,[]);}
+  list.forEach(o=>{line(o.h,o.tr.color,o.gap<1?.9:.55,o.gap<1?1.8:1.2,o.gap<1?[]:[6,5]);});
+  // gap labels on the right edge, along each rider's line
+  list.forEach(o=>{const q=scr(o.h);const txt=o.gap<1?'1st':'−'+Math.round(o.gap)+' m';ctx.font=`700 ${11*d}px ${css('--txt')}`;
+    const ex=W-10*d,ey=q.y+((ex-q.x)*(scr({x:o.h.x+p.x,y:o.h.y+p.y}).y-q.y)/((scr({x:o.h.x+p.x,y:o.h.y+p.y}).x-q.x)||1e-6));
+    if(!isFinite(ey)||ey<12*d||ey>H-12*d)return;const w=ctx.measureText(txt).width+10*d;
+    ctx.fillStyle=isDark()?'rgba(6,17,26,.85)':'rgba(255,255,255,.9)';ctx.beginPath();ctx.roundRect(ex-w,ey-9*d,w,18*d,9*d);ctx.fill();ctx.strokeStyle=o.tr.color;ctx.lineWidth=1.2*d;ctx.stroke();
+    ctx.fillStyle=css('--fg');ctx.textAlign='right';ctx.fillText(txt,ex-5*d,ey+4*d);});}
+/* ---- 3D view: perspective camera, height = speed (exaggerated), drag to orbit, wheel/pinch to zoom ---- */
+const ZK=6;            // metres of height per knot
+function draw3d(){resize();const d=devicePixelRatio||1,W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);const t=curT(),w=aw(),r=refRace(),fg=css('--fg'),mut=css('--muted');
+  if(!cam.ok){const hs=visTracks().map(tr=>posAt(tr,t)).filter(Boolean);if(hs.length){cam.cx=hs.reduce((a,h)=>a+h.x,0)/hs.length;cam.cy=hs.reduce((a,h)=>a+h.y,0)/hs.length;const sp=Math.max(...hs.map(h=>Math.hypot(h.x-cam.cx,h.y-cam.cy)));cam.dist=Math.max(300,Math.min(3000,sp*2.6+200));}else{const c=rot2inv({x:view.cx,y:view.cy});cam.cx=c.x;cam.cy=c.y;cam.dist=900;}cam.yaw=rad(windAt(t));cam.pitch=.5;cam.ok=true;}
+  if(follow){const ft=visTracks().find(x=>x.id===follow),h=ft&&posAt(ft,t);if(h){const k=playing?.15:1;cam.cx+=(h.x-cam.cx)*k;cam.cy+=(h.y-cam.cy)*k;}}
+  const f=H*1.15,cy=Math.cos(cam.yaw),sy=Math.sin(cam.yaw),cp=Math.cos(cam.pitch),sp=Math.sin(cam.pitch);
+  const P=(x,y,z)=>{const dx=x-cam.cx,dy=y-cam.cy;const fw=dx*sy+dy*cy,rt=dx*cy-dy*sy;const depth=cam.dist+fw*cp-z*sp,up=fw*sp+z*cp;if(depth<20)return null;return {x:W/2+rt*f/depth,y:H*.58-up*f/depth,k:f/depth};};
+  // sky / water
+  const gr=ctx.createLinearGradient(0,0,0,H);gr.addColorStop(0,isDark()?'#0b2a40':'#cfe6f2');gr.addColorStop(.35,isDark()?'#06202f':'#b8d9ea');gr.addColorStop(1,isDark()?'#020b12':'#9cc6dc');ctx.fillStyle=gr;ctx.fillRect(0,0,W,H);
+  // grid on the water
+  const step=[50,100,200,500].find(n=>n*f/cam.dist>60*d)||500,R=Math.ceil(cam.dist*1.6/step)*step;
+  ctx.strokeStyle=isDark()?'rgba(120,190,230,.10)':'rgba(20,70,110,.12)';ctx.lineWidth=1*d;
+  for(let g=-R;g<=R;g+=step){const ax=Math.round(cam.cx/step)*step+g,ay=Math.round(cam.cy/step)*step+g;
+    let a=P(ax,cam.cy-R,0),b=P(ax,cam.cy+R,0);if(a&&b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+    a=P(cam.cx-R,ay,0);b=P(cam.cx+R,ay,0);if(a&&b){ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
+  // wind ladder on the water
+  if(ladderOn){const {u,list}=ladderRank(t);const pp={x:u.y,y:-u.x},L=cam.dist*1.4;list.forEach(o=>{const a=P(o.h.x-pp.x*L,o.h.y-pp.y*L,0),b=P(o.h.x+pp.x*L,o.h.y+pp.y*L,0);if(!a||!b)return;ctx.strokeStyle=o.tr.color;ctx.globalAlpha=o.gap<1?.8:.45;ctx.lineWidth=(o.gap<1?2:1.2)*d;ctx.setLineDash(o.gap<1?[]:[6*d,5*d]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;});}
+  // course
+  if(geo(r)){const pole=(m,col,lab,hgt)=>{const a=P(m.x,m.y,0),b=P(m.x,m.y,hgt);if(!a||!b)return;ctx.strokeStyle=col;ctx.lineWidth=3*d;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.fillStyle=col;ctx.beginPath();ctx.arc(b.x,b.y,Math.max(4*d,6*b.k),0,7);ctx.fill();ctx.font=`700 ${11*d}px ${css('--txt')}`;ctx.textAlign='center';ctx.fillText(lab,b.x,b.y-10*d);};
+    const a=P(r.P.x,r.P.y,0),b=P(r.C.x,r.C.y,0);if(a&&b){ctx.strokeStyle=fg;ctx.lineWidth=2*d;ctx.setLineDash([8*d,6*d]);ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.setLineDash([]);}
+    pole(r.P,css('--pin'),'PIN',40);pole(r.C,css('--cmt'),'COMMITTEE',40);pole(r.M,css('--mark'),'MARK 1',60);if(r.M2)pole(r.M2,'#F472B6','MARK 2',60);}
+  // tracks
+  const span=trailSec?trailSec*1000:Math.max(1000,t-w.t0),fid=focusOK();const items=[];
+  visTracks().forEach(tr=>{const rs=tr.rs,a=Math.max(0,ri(rs,w.t0)),b=Math.min(rs.n-1,ri(rs,t)),dim=fid&&tr.id!==fid?.3:1;
+    // shadow of the whole window on the water
+    ctx.strokeStyle=tr.color;ctx.globalAlpha=.12*dim;ctx.lineWidth=1*d;ctx.beginPath();let on=false;
+    for(let i=Math.max(0,ri(rs,w.t0));i<=Math.min(rs.n-1,ri(rs,w.t1));i+=2){if(!rs.OK[i]){on=false;continue;}const q=P(rs.X[i],rs.Y[i],0);if(!q){on=false;continue;}if(!on){ctx.moveTo(q.x,q.y);on=true;}else ctx.lineTo(q.x,q.y);}ctx.stroke();ctx.globalAlpha=1;
+    // trail in the air: height = speed, with curtain to the water
+    const ta=Math.max(a,ri(rs,t-span));
+    for(let i=ta;i<b;i++){if(!rs.OK[i]||!rs.OK[i+1])continue;const fz=1-Math.min(1,(t-(rs.t0+(i+1)*1000))/span);
+      const z0=rs.V[i]*KN*ZK,z1=rs.V[i+1]*KN*ZK,p0=P(rs.X[i],rs.Y[i],z0),p1=P(rs.X[i+1],rs.Y[i+1],z1);if(!p0||!p1)continue;
+      if(i%2===0){const g0=P(rs.X[i],rs.Y[i],0);if(g0){ctx.strokeStyle=tr.color;ctx.globalAlpha=.10*fz*dim;ctx.lineWidth=1*d;ctx.beginPath();ctx.moveTo(g0.x,g0.y);ctx.lineTo(p0.x,p0.y);ctx.stroke();}}
+      ctx.strokeStyle=colorMode==='spd'&&tr.id===fid?rampCol(rs.V[i]*KN/spdMax):tr.color;ctx.globalAlpha=(.15+.85*fz)*dim;ctx.lineWidth=(1+3*fz)*d;ctx.beginPath();ctx.moveTo(p0.x,p0.y);ctx.lineTo(p1.x,p1.y);ctx.stroke();}
+    ctx.globalAlpha=1;const h=posAt(tr,t);if(h){const st=steady(tr,t)||h,z=st.v*KN*ZK,top=P(h.x,h.y,z),bot=P(h.x,h.y,0);if(top&&bot)items.push({tr,top,bot,kn:st.v*KN,dim});}});
+  items.sort((a,b)=>a.top.k-b.top.k).forEach(o=>{ctx.globalAlpha=o.dim<1?.5:1;ctx.strokeStyle=o.tr.color;ctx.lineWidth=1.5*d;ctx.beginPath();ctx.moveTo(o.bot.x,o.bot.y);ctx.lineTo(o.top.x,o.top.y);ctx.stroke();
+    ctx.fillStyle=o.tr.color;ctx.shadowColor=o.tr.color;ctx.shadowBlur=isDark()?14*d:0;ctx.beginPath();ctx.arc(o.top.x,o.top.y,Math.max(5*d,Math.min(10*d,9*o.top.k)),0,7);ctx.fill();ctx.shadowBlur=0;
+    ctx.globalAlpha=1;if(follow!==o.tr.id)pillLabel(o.top.x+10*d,o.top.y-12*d,o.tr.name+'  '+o.kn.toFixed(1),o.tr.color,d);});
+  // wind arrow + legend
+  ctx.fillStyle=isDark()?'rgba(6,17,26,.7)':'rgba(255,255,255,.8)';ctx.beginPath();ctx.roundRect(10*d,10*d,170*d,52*d,12*d);ctx.fill();
+  ctx.fillStyle=mut;ctx.font=`700 ${9*d}px ${css('--txt')}`;ctx.textAlign='left';ctx.fillText('3D · HEIGHT = SPEED',20*d,28*d);
+  ctx.fillStyle=fg;ctx.font=`500 ${15*d}px ${css('--num')}`;ctx.fillText('Wind '+windAt(t)+'° · drag to orbit',20*d,50*d);
+  $('legend').hidden=true;}
+function rot2inv(q){const a=windUp?rad(viewWind()):0,c=Math.cos(-a),s=Math.sin(-a);return {x:q.x*c-q.y*s,y:q.x*s+q.y*c};}
+function draw(){if(mode3d){draw3d();return;}
   resize();const d=devicePixelRatio||1,W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
   const fg=css('--fg'),mut=css('--muted'),w=win(),A=aw(),t=curT();
   if(follow){const ft=visTracks().find(x=>x.id===follow);const h=ft&&posAt(ft,t);if(h){const st=steady(ft,t)||h;const la=Math.min(60,st.v*4),a=rad(st.hdg);
@@ -757,6 +823,7 @@ function draw(){
     mark(P,css('--pin'),'PIN',false,22);mark(C,css('--cmt'),'COMMITTEE',true,22);mark(M,css('--mark'),'MARK 1',false,-14);if(r.M2)mark(scr(r.M2),'#F472B6','MARK 2',false,22);
     if(!race){ctx.fillStyle=mut;ctx.font=`600 ${11*d}px ${css('--txt')}`;ctx.fillText('R'+r.n+' course',M.x,M.y-28*d);}
     ctx.globalAlpha=1;}
+  if(ladderOn)drawLadder(t,d);
   // tracks: older history thin and faint, recent trail thick and fading with age
   const span=trailSec?trailSec*1000:Math.max(1000,t-w.t0), hist=isDark()?.10:.14, labels=[];
   const fid=focusOK();if(colorMode==='spd'&&!fid&&visTracks().length){focusId=visTracks()[0].id;store.set('focus',focusId);setTimeout(renderList,0);}
@@ -1027,12 +1094,13 @@ function renderList(){const L=$('trkList');L.innerHTML='';const list=dayTracks()
   else if(!list.length&&!tracks.some(t=>t.day===day))L.innerHTML='<div class="note">No tracks for this day yet. Load your GPX or TCX file: it is shared with the team and grouped with whoever sailed with you.</div>';}
 function renderLive(){const t=curT(),r=refRace(),out=[];
   out.push(`<div class="r k"><span></span><span>Athlete</span><span>kn</span><span>TWA</span><span>${geo(r)?(race&&rel<0?'to line':'to mark 1'):''}</span></div>`);
-  const vis=visTracks();
+  const vis=visTracks();const LR=ladderOn?ladderRank(t):null;const gapOf=tr=>{if(!LR)return '';const o=LR.list.find(x=>x.tr===tr);return o?`<span class="note" style="margin-left:6px">${o.gap<1?'lead':'−'+Math.round(o.gap)+'m'}</span>`:'';};
+  if(LR)vis.sort((a,b)=>{const x=LR.list.find(o=>o.tr===a),y=LR.list.find(o=>o.tr===b);return (x?x.pos:99)-(y?y.pos:99);});
   vis.forEach(tr=>{const h0=posAt(tr,t),st=h0&&steady(tr,t),h=h0&&st?Object.assign({},h0,st):h0;let sp='—',ta='—',dl='—',cls='',fc='';
     if(h){sp=f1(h.v*KN);if(h.v*KN>=foilThr)fc='style="color:var(--foil)"';if(h.v>1.5){const s=wrap(h.hdg-windAt(t));ta=Math.round(Math.abs(s))+(s>0?'P':'S');}
       if(geo(r)){const v=sub(r.C,r.P),sd=crs(v,sub(h,r.P))/r.L*r.courseSign;
         if(race&&rel<0){dl=(sd>0?'+':'')+Math.round(sd)+' m';if(sd>0)cls='ocs';}else dl=Math.round(len(sub(h,r.M)))+' m';}}
-    out.push(`<div class="r"><span class="dot" style="background:${tr.color};color:${tr.color}"></span><span class="nm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tr.name)}</span><span class="spd" ${fc}>${sp}</span><span>${ta}</span><span class="${cls}">${dl}</span></div>`);});
+    out.push(`<div class="r"><span class="dot" style="background:${tr.color};color:${tr.color}"></span><span class="nm" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tr.name)}${gapOf(tr)}</span><span class="spd" ${fc}>${sp}</span><span>${ta}</span><span class="${cls}">${dl}</span></div>`);});
   if(!vis.length)out.push('<div class="note">No visible tracks.</div>');
   else out.push(`<div class="note">TWA: true wind angle, P = port tack, S = starboard tack. Speed in green = foiling.${race&&rel<0?' Before the start: distance to the line, red = already over.':''}</div>`);
   $('live').innerHTML=out.join('');}
@@ -1384,7 +1452,7 @@ const ptrs=new Map();let gest=null,lastTap=0,lastTapXY=null,downAt=0,moved=0;
 const cpt=e=>{const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;return {x:(e.clientX-r.left)*d,y:(e.clientY-r.top)*d};};
 const qAt=p=>({x:view.cx+(p.x-cv.width/2)/view.s,y:view.cy-(p.y-cv.height/2)/view.s});
 const clampS=s=>Math.max(.02,Math.min(60,s));
-function zoomAt(p,k){const q=qAt(p);view.s=clampS(view.s*k);view.cx=q.x-(p.x-cv.width/2)/view.s;view.cy=q.y+(p.y-cv.height/2)/view.s;stopFollow();draw();}
+function zoomAt(p,k){if(mode3d){cam.dist=Math.max(80,Math.min(8000,cam.dist/k));draw();return;}const q=qAt(p);view.s=clampS(view.s*k);view.cx=q.x-(p.x-cv.width/2)/view.s;view.cy=q.y+(p.y-cv.height/2)/view.s;stopFollow();draw();}
 function stopFollow(){if(follow){follow='';$('follow').value='';setTimeout(renderHud,0);}}
 function startGest(){const ps=[...ptrs.values()];
   if(ps.length===1)gest={k:'pan',p:ps[0],cx:view.cx,cy:view.cy};
@@ -1392,6 +1460,8 @@ function startGest(){const ps=[...ptrs.values()];
   else gest=null;}
 cv.addEventListener('pointerdown',e=>{cv.setPointerCapture(e.pointerId);ptrs.set(e.pointerId,cpt(e));if(ptrs.size===1){downAt=performance.now();moved=0;}startGest();cv.style.cursor='grabbing';hideHint();});
 cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;const p=cpt(e),o=ptrs.get(e.pointerId);moved+=Math.hypot(p.x-o.x,p.y-o.y);ptrs.set(e.pointerId,p);if(!gest)return;
+  if(mode3d){if(ptrs.size===1&&gest.k==='pan'){const dx=p.x-(gest.lx??gest.p.x),dy=p.y-(gest.ly??gest.p.y);gest.lx=p.x;gest.ly=p.y;cam.yaw-=dx*0.006;cam.pitch=Math.max(.12,Math.min(1.45,cam.pitch+dy*0.004));draw();}
+    else if(gest.k==='pinch'&&ptrs.size>=2){const ps=[...ptrs.values()];const dd=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y);gest.cd=gest.cd||cam.dist;cam.dist=Math.max(80,Math.min(8000,gest.cd*gest.d0/dd));draw();}return;}
   if(gest.k==='pan'&&ptrs.size===1){if(moved>6*(devicePixelRatio||1))stopFollow();view.cx=gest.cx-(p.x-gest.p.x)/view.s;view.cy=gest.cy+(p.y-gest.p.y)/view.s;draw();}
   else if(gest.k==='pinch'&&ptrs.size>=2){const ps=[...ptrs.values()];const d=Math.hypot(ps[0].x-ps[1].x,ps[0].y-ps[1].y),m={x:(ps[0].x+ps[1].x)/2,y:(ps[0].y+ps[1].y)/2};
     view.s=clampS(gest.s0*d/gest.d0);view.cx=gest.q.x-(m.x-cv.width/2)/view.s;view.cy=gest.q.y+(m.y-cv.height/2)/view.s;stopFollow();draw();}});
@@ -1400,7 +1470,7 @@ function endPtr(e){if(!ptrs.has(e.pointerId))return;const p=ptrs.get(e.pointerId
     if(now-downAt<250&&moved<10*dpr){if(now-lastTap<320&&lastTapXY&&Math.hypot(p.x-lastTapXY.x,p.y-lastTapXY.y)<40*dpr){zoomAt(p,2);lastTap=0;}else{lastTap=now;lastTapXY=p;}}
     gest=null;}else startGest();}
 cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
-cv.addEventListener('wheel',e=>{e.preventDefault();zoomAt(cpt(e),Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.002)));},{passive:false});
+cv.addEventListener('wheel',e=>{e.preventDefault();if(mode3d){cam.dist=Math.max(80,Math.min(8000,cam.dist*Math.exp(e.deltaY*0.0015)));draw();return;}zoomAt(cpt(e),Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.002)));},{passive:false});
 $('zIn').onclick=()=>zoomAt({x:cv.width/2,y:cv.height/2},1.6);
 $('zOut').onclick=()=>zoomAt({x:cv.width/2,y:cv.height/2},1/1.6);
 let hintT=setTimeout(hideHint,6000);function hideHint(){clearTimeout(hintT);$('hint').style.opacity=0;}
@@ -1415,6 +1485,8 @@ $('follow').addEventListener('change',e=>{follow=e.target.value;if(follow){const
 $('hudX').onclick=()=>{stopFollow();renderHud();};
 $('mPlay').onclick=()=>$('play').click();
 $('focus').addEventListener('change',e=>setFocus(e.target.value));
+$('ladderBtn').setAttribute('aria-pressed',ladderOn);$('ladderBtn').onclick=()=>{ladderOn=!ladderOn;store.set('ladder',ladderOn);$('ladderBtn').setAttribute('aria-pressed',ladderOn);draw();renderLive();};
+$('mode3dBtn').onclick=()=>{mode3d=!mode3d;$('mode3dBtn').setAttribute('aria-pressed',mode3d);if(mode3d){cam.ok=false;}else $('legend').hidden=false;draw();};
 $('dataAll').onclick=()=>{const v=visTracks();const allOn=v.length&&v.every(t=>dataOn.has(t.id));v.forEach(t=>allOn?dataOn.delete(t.id):dataOn.add(t.id));saveDataOn();renderList();draw();};
 $('mScrub').addEventListener('input',e=>{rel=+e.target.value;tickRender();});
 document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,select'))return;if(e.key===' '){e.preventDefault();$('play').click();}else if(e.key==='ArrowRight'){rel+=e.shiftKey?10:1;clampRel();tickRender();}else if(e.key==='ArrowLeft'){rel-=e.shiftKey?10:1;clampRel();tickRender();}else if(e.key==='['){$('rgA').click();}else if(e.key===']'){$('rgB').click();}});
