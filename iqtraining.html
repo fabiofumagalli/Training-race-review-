@@ -529,6 +529,7 @@ let view={cx:0,cy:0,s:1};
 let selMan=null, pubLoading=true;
 let rng=null, zoom=false, chartMode='scrub';
 let trailSec=store.get('trail',60), follow='';
+let hitPts=[];window.IQhits=()=>hitPts;let autoR1=false;
 let ladderOn=store.get('ladder',true), mode3d=false;
 const cam={yaw:0,pitch:.55,dist:900,cx:0,cy:0,ok:false};
 const dataOn=new Set(store.get('dataOn',[]));
@@ -798,7 +799,7 @@ function draw3d(){resize();const d=devicePixelRatio||1,W=cv.width,H=cv.height;ct
     if(lift){const a=P(...at(0,0,0)),b=P(...at(0,0,lift));if(a&&b){ctx.strokeStyle=o.tr.color;ctx.lineWidth=1.5*d;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}}
     poly([at(L*.6,0,lift),at(-L*.4,B*.55,lift),at(-L*.2,0,lift),at(-L*.4,-B*.55,lift)],o.tr.color,isDark()?'rgba(255,255,255,.8)':'rgba(0,0,0,.45)');
     return P(...at(0,0,lift));};
-  items.sort((a,b)=>a.top.k-b.top.k).forEach(o=>{ctx.globalAlpha=o.dim<1?.5:1;const tp=board(o)||o.top;
+  items.sort((a,b)=>a.top.k-b.top.k).forEach(o=>{ctx.globalAlpha=o.dim<1?.5:1;const tp=board(o)||o.top;hitPts.push({id:o.tr.id,x:o.bot.x,y:o.bot.y});
     ctx.globalAlpha=1;if(follow!==o.tr.id)pillLabel(tp.x+10*d,tp.y-14*d,o.tr.name,o.tr.color,d);});
   // wind arrow + legend
   ctx.fillStyle=isDark()?'rgba(6,17,26,.7)':'rgba(255,255,255,.8)';ctx.beginPath();ctx.roundRect(10*d,10*d,170*d,52*d,12*d);ctx.fill();
@@ -806,7 +807,7 @@ function draw3d(){resize();const d=devicePixelRatio||1,W=cv.width,H=cv.height;ct
   ctx.fillStyle=fg;ctx.font=`500 ${15*d}px ${css('--num')}`;ctx.fillText('Wind '+windAt(t)+'° · drag to orbit',20*d,50*d);
   $('legend').hidden=true;}
 function rot2inv(q){const a=windUp?rad(viewWind()):0,c=Math.cos(-a),s=Math.sin(-a);return {x:q.x*c-q.y*s,y:q.x*s+q.y*c};}
-function draw(){if(mode3d){draw3d();return;}
+function draw(){hitPts=[];if(mode3d){draw3d();return;}
   resize();const d=devicePixelRatio||1,W=cv.width,H=cv.height;ctx.clearRect(0,0,W,H);
   const fg=css('--fg'),mut=css('--muted'),w=win(),A=aw(),t=curT();
   if(follow){const ft=visTracks().find(x=>x.id===follow);const h=ft&&posAt(ft,t);if(h){const st=steady(ft,t)||h;const la=Math.min(60,st.v*4),a=rad(st.hdg);
@@ -870,7 +871,7 @@ function draw(){if(mode3d){draw3d();return;}
       ctx.beginPath();if(m.type==='T'){ctx.moveTo(q.x,q.y-5.5*d);ctx.lineTo(q.x+5*d,q.y+4*d);ctx.lineTo(q.x-5*d,q.y+4*d);ctx.closePath();}else ctx.arc(q.x,q.y,4.5*d,0,7);ctx.fill();ctx.stroke();
       if(isSel){ctx.beginPath();ctx.arc(q.x,q.y,13*d,0,7);ctx.strokeStyle=css('--accent');ctx.lineWidth=2*d;ctx.stroke();}ctx.globalAlpha=1;});
     // boat
-    const h=posAt(tr,t);if(h){const q=scr(h);const hd=rad(h.hdg-(windUp?viewWind():0));ctx.globalAlpha=dim<1?.55:1;
+    const h=posAt(tr,t);if(h){const q=scr(h);hitPts.push({id:tr.id,x:q.x,y:q.y});const hd=rad(h.hdg-(windUp?viewWind():0));ctx.globalAlpha=dim<1?.55:1;
       ctx.save();ctx.translate(q.x,q.y);ctx.rotate(hd);ctx.fillStyle=tr.color;ctx.shadowColor=tr.color;ctx.shadowBlur=isDark()?16*d:4*d;
       ctx.beginPath();ctx.moveTo(0,-11*d);ctx.lineTo(6*d,7*d);ctx.lineTo(0,3.5*d);ctx.lineTo(-6*d,7*d);ctx.closePath();ctx.fill();ctx.shadowBlur=0;
       ctx.strokeStyle=isDark()?'#06111A':'#fff';ctx.lineWidth=1.5*d;ctx.stroke();ctx.restore();ctx.globalAlpha=1;
@@ -1269,7 +1270,7 @@ async function initLog(){
   dbRef=db;logMode='db';setStatus('Connecting to the team data…');
   try{db.collection('tracks').onSnapshot(onTracksSnap,()=>{});}catch(e){}
   try{db.collection('sheets').onSnapshot(sn=>{const nw={};sn.docs.forEach(d=>{const v=d.data();if(v&&Array.isArray(v.races))nw[d.id]=v;});
-      if(JSON.stringify(nw)!==JSON.stringify(sheets)){sheets=nw;store.set('sheets',sheets);rebuildRaces();const k=race&&race.key;race=k?RACES.find(r=>r.key===k)||null:null;cache.clear();allRender();refit();draw();}},()=>{});}catch(e){}
+      if(JSON.stringify(nw)!==JSON.stringify(sheets)){sheets=nw;store.set('sheets',sheets);rebuildRaces();const k=race&&race.key;race=k?RACES.find(r=>r.key===k)||null:null;if(autoR1&&!race&&pageView==='analysis'){const rs=racesOfDay(day);if(rs.length){selectRace(rs[0]);return;}}cache.clear();allRender();refit();draw();}},()=>{});}catch(e){}
   try{db.collection('days').onSnapshot(sn=>{const nw={};sn.docs.forEach(d=>{const v=d.data();if(v&&Array.isArray(v.hide))nw[d.id]=v.hide;});
       if(JSON.stringify(nw)!==JSON.stringify(dayHide)){dayHide=nw;store.set('dayHide',dayHide);hideVer++;cache.clear();allRender();draw();}},()=>{});}catch(e){}
   try{windDoc=db.doc('config/wind');windDoc.onSnapshot(sn=>{if(sn.exists){const d=sn.data()||{};const nw={};Object.keys(d).forEach(k=>{if(typeof d[k]==='number')nw[k]=d[k];});
@@ -1473,6 +1474,10 @@ const cpt=e=>{const r=cv.getBoundingClientRect(),d=devicePixelRatio||1;return {x
 const qAt=p=>({x:view.cx+(p.x-cv.width/2)/view.s,y:view.cy-(p.y-cv.height/2)/view.s});
 const clampS=s=>Math.max(.02,Math.min(60,s));
 function zoomAt(p,k){if(mode3d){cam.dist=Math.max(80,Math.min(8000,cam.dist/k));draw();return;}const q=qAt(p);view.s=clampS(view.s*k);view.cx=q.x-(p.x-cv.width/2)/view.s;view.cy=q.y+(p.y-cv.height/2)/view.s;stopFollow();draw();}
+// tap on an athlete: follow it (tap again to stop)
+function pickRider(p){const dpr=devicePixelRatio||1;let best=null,bd=28*dpr;hitPts.forEach(h=>{const dd=Math.hypot(h.x-p.x,h.y-p.y);if(dd<bd){bd=dd;best=h;}});if(!best)return false;
+  const sel=$('follow');if(follow===best.id){stopFollow();draw();return true;}
+  if(![...sel.options].some(o=>o.value===best.id))return false;sel.value=best.id;sel.dispatchEvent(new Event('change'));lastTap=0;return true;}
 function stopFollow(){if(follow){follow='';$('follow').value='';setTimeout(renderHud,0);}}
 function startGest(){const ps=[...ptrs.values()];
   if(ps.length===1)gest={k:'pan',p:ps[0],cx:view.cx,cy:view.cy};
@@ -1487,7 +1492,8 @@ cv.addEventListener('pointermove',e=>{if(!ptrs.has(e.pointerId))return;const p=c
     view.s=clampS(gest.s0*d/gest.d0);view.cx=gest.q.x-(m.x-cv.width/2)/view.s;view.cy=gest.q.y+(m.y-cv.height/2)/view.s;stopFollow();draw();}});
 function endPtr(e){if(!ptrs.has(e.pointerId))return;const p=ptrs.get(e.pointerId);ptrs.delete(e.pointerId);
   if(ptrs.size===0){cv.style.cursor='grab';const now=performance.now(),dpr=devicePixelRatio||1;
-    if(now-downAt<250&&moved<10*dpr){if(now-lastTap<320&&lastTapXY&&Math.hypot(p.x-lastTapXY.x,p.y-lastTapXY.y)<40*dpr){zoomAt(p,2);lastTap=0;}else{lastTap=now;lastTapXY=p;}}
+    if(now-downAt<250&&moved<10*dpr&&pickRider(p))gest=null;
+    else if(now-downAt<250&&moved<10*dpr){if(now-lastTap<320&&lastTapXY&&Math.hypot(p.x-lastTapXY.x,p.y-lastTapXY.y)<40*dpr){zoomAt(p,2);lastTap=0;}else{lastTap=now;lastTapXY=p;}}
     gest=null;}else startGest();}
 cv.addEventListener('pointerup',endPtr);cv.addEventListener('pointercancel',endPtr);
 cv.addEventListener('wheel',e=>{e.preventDefault();if(mode3d){cam.dist=Math.max(80,Math.min(8000,cam.dist*Math.exp(e.deltaY*0.0015)));draw();return;}zoomAt(cpt(e),Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.002)));},{passive:false});
@@ -1571,7 +1577,11 @@ rel=race?-30:0;lastFit=race?'start':'all';
   const realStaff=IQ.isStaff();let pv=false;try{pv=sessionStorage.getItem('iq-preview')==='rider';}catch(e){}
   if(realStaff){const b=$('asRider');b.hidden=false;if(pv){IQ.isStaff=()=>false;IQ.role='rider';b.textContent='✕ Exit rider view';b.style.borderColor='var(--warn)';const bar=document.createElement('div');bar.className='status';bar.textContent='Rider view: this is what a rider sees. Coach and admin tools are hidden.';document.querySelector('.wrap').insertBefore(bar,document.querySelector('.wrap').children[1]);}
     b.onclick=()=>{try{pv?sessionStorage.removeItem('iq-preview'):sessionStorage.setItem('iq-preview','rider');}catch(e){}location.reload();};}
-  if(!IQ.isStaff()){document.body.classList.add('rider');}routeHash();loadPublished();initLog();})();
+  if(!IQ.isStaff()){document.body.classList.add('rider');}routeHash();loadPublished();initLog();
+  // riders land straight on the latest event: Race 1 if the coach logged races, otherwise the session
+  if(!IQ.isStaff()&&!location.hash){autoR1=true;let tries=0;const go=()=>{const days=[...new Set([...tracks.map(t=>t.day),...Object.keys(sheets||{})])].filter(Boolean).sort();
+      if(days.length&&tries>=3){if(pageView==='home'&&!location.hash)openDay(days[days.length-1]);setTimeout(()=>autoR1=false,8000);return;}if(++tries<40)setTimeout(go,300);};go();}
+})();
 })();
 </script>
 </body></html>
