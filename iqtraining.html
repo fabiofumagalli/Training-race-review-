@@ -166,9 +166,9 @@ tbody tr:hover{background:color-mix(in srgb,var(--accent) 6%,transparent)}
 tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
 .bar-in{display:inline-block;height:6px;border-radius:3px;background:linear-gradient(90deg,var(--accent),var(--accent2));vertical-align:middle;margin-left:8px;opacity:.85}
 .note{font-size:12px;color:var(--muted);line-height:1.5}
-.ptabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border-radius:18px;background:var(--panel);border:2px solid color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 10%,transparent),0 10px 30px rgba(0,0,0,.25);width:100%;position:sticky;top:6px;z-index:20;margin:14px 0}
+.ptabs{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:8px;border-radius:18px;background:var(--panel);border:2px solid color-mix(in srgb,var(--accent) 55%,var(--line));box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 10%,transparent),0 10px 30px rgba(0,0,0,.25);width:100%;margin:18px 0 6px}
 .ptabs::before{content:'ANALYSIS';font:700 11px var(--txt);letter-spacing:1.5px;color:var(--accent);padding:0 8px 0 6px}
-.ptabs button{flex:1 1 auto;font-family:var(--num);font-size:19px;letter-spacing:.3px;border:0;background:color-mix(in srgb,var(--fg) 5%,transparent);min-height:48px;padding:10px 18px;border-radius:12px}
+.ptabs button{flex:1 1 auto;font-family:var(--num);font-size:18px;letter-spacing:.3px;border:0;background:color-mix(in srgb,var(--fg) 5%,transparent);min-height:44px;padding:8px 16px;border-radius:12px}
 .ptabs button:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
 @media(max-width:700px){.ptabs::before{width:100%;padding:2px 6px}.ptabs button{font-size:16px;min-height:42px;padding:8px 12px}}
 .ptabs .cnt{font-family:var(--txt);font-size:11px;opacity:.75;margin-left:5px}
@@ -244,14 +244,6 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
   <div id="analysis">
   <div class="bar" id="tabs" role="group" aria-label="Race or session"></div>
   <div class="strip" id="strip"></div>
-  <div class="ptabs" role="tablist" id="ptabs">
-    <button role="tab" data-p="man" aria-selected="true">Manoeuvres<span class="cnt" id="cMan"></span></button>
-    <button role="tab" data-p="spd">Speed</button>
-    <button role="tab" data-p="pol">Polar</button>
-    <button role="tab" data-p="start">Race</button>
-    <button role="tab" data-p="log">Coach log<span class="cnt" id="cLog"></span></button>
-    <button role="tab" data-p="setup">Setup<span class="cnt" id="cSetup"></span></button>
-  </div>
   <div class="tiles" id="tiles"></div>
 
   <div class="main">
@@ -323,6 +315,15 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
     </div>
   </div>
 
+
+  <div class="ptabs" role="tablist" id="ptabs">
+    <button role="tab" data-p="man" aria-selected="true">Manoeuvres<span class="cnt" id="cMan"></span></button>
+    <button role="tab" data-p="spd">Speed</button>
+    <button role="tab" data-p="pol">Polar</button>
+    <button role="tab" data-p="start">Race</button>
+    <button role="tab" data-p="log">Coach log<span class="cnt" id="cLog"></span></button>
+    <button role="tab" data-p="setup">Setup<span class="cnt" id="cSetup"></span></button>
+  </div>
 
   <section class="panel" id="p-man" role="tabpanel">
     <div class="bar">
@@ -1433,7 +1434,7 @@ $('shDel').onclick=async()=>{if(!sheets[day])return;delete sheets[day];store.set
 let panel='man';
 function showPanel(p){panel=p;$('ptabs').querySelectorAll('button').forEach(b=>b.setAttribute('aria-selected',b.dataset.p===p));['man','spd','pol','start','log','setup'].forEach(k=>$('p-'+k).hidden=k!==p);renderPanel();}
 function renderPanel(){({man:renderMan,spd:renderSpd,pol:renderPol,start:renderStart,log:renderLogAll,setup:renderSetup})[panel]();}
-$('ptabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b){showPanel(b.dataset.p);const pn=$('p-'+b.dataset.p);if(pn)setTimeout(()=>{const y=pn.getBoundingClientRect().top+scrollY-$('ptabs').offsetHeight-16;window.scrollTo({top:y,behavior:'smooth'});},30);}});
+$('ptabs').addEventListener('click',e=>{const b=e.target.closest('button');if(b)showPanel(b.dataset.p);});
 $('goSetup').onclick=()=>{showPanel('setup');setTimeout(()=>$('ptabs').scrollIntoView({behavior:'smooth'}),50);};
 $('openLog').onclick=()=>{showPanel('log');$('p-log').scrollIntoView({behavior:'smooth'});};
 $('noteHere').onclick=()=>{playing=false;renderClock();showPanel('log');$('lAttach').checked=true;$('lRace').value=race?race.key:'';$('p-log').scrollIntoView({behavior:'smooth'});setTimeout(()=>$('lText').focus(),300);};
