@@ -239,7 +239,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div><h3 class="hsec">Events</h3><div class="slist" id="hTeam"></div></div>
       <div><h3 class="hsec">My sessions</h3><div class="slist" id="hMine"></div><div class="tiles" id="hTiles" style="margin-top:12px"></div></div>
     </div>
-    <input type="file" id="hFile" accept=".gpx,.tcx,.xml,.vkx" multiple hidden>
+    <input type="file" id="hFile" accept=".gpx,.tcx,.xml,.vkx,.csv,.txt" multiple hidden>
   </section>
   <div id="analysis">
   <div class="bar" id="tabs" role="group" aria-label="Race or session"></div>
@@ -298,8 +298,8 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="card">
         <h2>Athletes <small id="trkCount"></small></h2>
         <div id="trkList"></div>
-        <div class="drop" id="drop">Drop GPX, TCX or Vakaros VKX files here<br>
-          <label class="btn">Load tracks<input type="file" id="file" accept=".gpx,.tcx,.xml,.vkx" multiple></label>
+        <div class="drop" id="drop">Drop GPX, TCX, CSV or Vakaros VKX files here<br>
+          <label class="btn">Load tracks<input type="file" id="file" accept=".gpx,.tcx,.xml,.vkx,.csv,.txt" multiple></label>
         </div>
         <div class="note" id="loadMsg"></div>
       </div>
@@ -527,6 +527,29 @@ function parseVKX(buf,fname){const dv=new DataView(buf),n=buf.byteLength,out=[],
     i=o+sz;}
   if(out.length<10)throw new Error('no GPS data in this .vkx file');
   return {name:fname.replace(/\.vkx$/i,''),pts:out,vkx:{line,timer}};}
+/* CSV tracks (Vakaros, phone apps, exports): finds latitude, longitude and time columns by name.
+   Time: ISO, epoch s/ms, "YYYY-MM-DD hh:mm:ss", "DD/MM/YYYY hh:mm:ss", or separate date + time columns. No zone = UTC. */
+function parseCSV(text,fname){const lines=text.replace(/^﻿/,'').split(/\r?\n/).filter(l=>l.trim());if(lines.length<3)throw new Error('empty CSV');
+  const first=lines[0],delim=[ '\t',';',','].map(d=>[d,first.split(d).length]).sort((a,b)=>b[1]-a[1])[0][0];
+  const split=l=>l.split(delim).map(x=>x.trim().replace(/^"|"$/g,''));
+  let hi=lines.findIndex(l=>/lat/i.test(l)&&/lon|lng/i.test(l));if(hi<0)throw new Error('CSV needs latitude and longitude columns');
+  const H=split(lines[hi]).map(h=>h.toLowerCase());const col=re=>H.findIndex(h=>re.test(h));
+  const cLat=col(/^(lat|latitude)\b|lat/),cLon=col(/^(lon|lng|long|longitude)\b|lon|lng/);
+  let cT=col(/timestamp|datetime|date.?time|utc|^time$|^t$|gps.?time|^time/),cD=col(/^date$|^data$/),cH=col(/^time$|^ora$|^hour/);
+  if(cT<0&&cD<0)cT=col(/time|date/);
+  const num=x=>+String(x).replace(',','.');
+  const toMs=(v,v2)=>{if(v2!=null&&v2!=='')v=v+' '+v2;v=String(v).trim();if(/^\d{9,}(\.\d+)?$/.test(v)){const n=+v;return n>1e12?n:n*1000;}
+    let m=v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})[ T](\d{1,2}):(\d{2}):(\d{2})(?:[.,](\d+))?/);
+    if(m)return Date.UTC(+m[3],m[2]-1,+m[1],+m[4],+m[5],+m[6])+(m[7]?+('0.'+m[7])*1000:0);
+    m=v.match(/^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})[ T](\d{1,2}):(\d{2}):(\d{2})(?:[.,](\d+))?(Z|[+-]\d{2}:?\d{2})?$/);
+    if(m&&!m[8])return Date.UTC(+m[1],m[2]-1,+m[3],+m[4],+m[5],+m[6])+(m[7]?+('0.'+m[7])*1000:0);
+    return Date.parse(v);};
+  const out=[];let last=-1e15;
+  for(let i=hi+1;i<lines.length;i++){const r=split(lines[i]);const lat=num(r[cLat]),lon=num(r[cLon]);if(!isFinite(lat)||!isFinite(lon)||(!lat&&!lon)||Math.abs(lat)>90||Math.abs(lon)>180)continue;
+    const t=cT>=0?toMs(r[cT],cT===cD?null:(cH>=0&&cH!==cT?r[cH]:null)):toMs(r[cD],cH>=0?r[cH]:null);if(!isFinite(t))continue;
+    if(t-last>=200){out.push({lat,lon,t});last=t;}}
+  if(out.length<10)throw new Error('no readable time + position rows in this CSV');
+  out.sort((a,b)=>a.t-b.t);return {name:fname.replace(/\.(csv|txt)$/i,''),pts:out};}
 function parseFile(text,fname){
   const doc=new DOMParser().parseFromString(text,'application/xml');
   if(doc.getElementsByTagName('parsererror').length)throw new Error('not a readable XML file');
@@ -1131,7 +1154,7 @@ function renderList(){const L=$('trkList');L.innerHTML='';const list=dayTracks()
   const others=groupsOf(day).filter(g=>g!==curGroup());
   if(others.length){const h=document.createElement('div');h.className='note';h.style.marginTop='6px';h.textContent='Other riders today sailed at another time or place: pick their group at the top.';L.appendChild(h);}
   if(pubLoading&&!list.length)L.innerHTML='<div class="note">Loading the training tracks…</div>';
-  else if(!list.length&&!tracks.some(t=>t.day===day))L.innerHTML='<div class="note">No tracks for this day yet. Load your GPX, TCX or VKX file: it is shared with the team and grouped with whoever sailed with you.</div>';}
+  else if(!list.length&&!tracks.some(t=>t.day===day))L.innerHTML='<div class="note">No tracks for this day yet. Load your GPX, TCX, CSV or VKX file: it is shared with the team and grouped with whoever sailed with you.</div>';}
 function renderLive(){const t=curT(),r=refRace(),out=[];
   out.push(`<div class="r k"><span></span><span>Athlete</span><span>kn</span><span>TWA</span><span>${geo(r)?(race&&rel<0?'to line':'to mark 1'):''}</span></div>`);
   const vis=visTracks();const LR=ladderOn?ladderRank(t):null;const gapOf=tr=>{if(!LR)return '';const o=LR.list.find(x=>x.tr===tr);return o?`<span class="note" style="margin-left:6px">${o.gap<1?'lead':'−'+Math.round(o.gap)+'m'}</span>`:'';};
@@ -1566,7 +1589,7 @@ let daysDoc=null;
 async function setHidden(tr,on){const list=new Set(dayHide[tr.day]||[]);on?list.add(tr.id):list.delete(tr.id);dayHide[tr.day]=[...list];store.set('dayHide',dayHide);hideVer++;cache.clear();allRender();refit();draw();
   if(logMode==='db'&&canWrite){try{await dbRef.doc('days/'+tr.day).set({hide:dayHide[tr.day]});}catch(e){}}}
 async function loadFiles(files){const msgs=[];let added=0,lastDay=null,sharedN=0;const shareOn=logMode==='db'&&canWrite;
-  for(const f of files){try{const {name,pts}=/\.vkx$/i.test(f.name)?parseVKX(await f.arrayBuffer(),f.name):parseFile(await f.text(),f.name);const tr=addTrack(name,pts,{color:COLORS[tracks.length%COLORS.length]});if(!tr)throw new Error('too few points');
+  for(const f of files){try{const {name,pts}=/\.vkx$/i.test(f.name)?parseVKX(await f.arrayBuffer(),f.name):/\.(csv|txt)$/i.test(f.name)?parseCSV(await f.text(),f.name):parseFile(await f.text(),f.name);const tr=addTrack(name,pts,{color:COLORS[tracks.length%COLORS.length]});if(!tr)throw new Error('too few points');
     const ex=tracks.find(t=>sameTrack(t,tr));if(ex){msgs.push(f.name+': already loaded as “'+ex.name+'”');lastDay=tr.day;continue;}
     if(shareOn){try{await shareTrack(tr);sharedN++;lastDay=tr.day;added++;continue;}catch(e){msgs.push(f.name+': not shared ('+((e&&e.code)||'error')+'), kept in this browser');}}
     tracks.push(tr);added++;lastDay=tr.day;}
