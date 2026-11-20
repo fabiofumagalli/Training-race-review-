@@ -386,6 +386,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
     <div class="card" id="teamCard" hidden>
       <h2>Team <small>admin only · roles</small></h2>
       <div class="note">Admin: everything. Coach: events, sheets, log, delete any track. Rider: loads own tracks, writes the log. Blocked: no access.</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0 10px"><button id="blockAll" class="danger">⛔ Block everyone except me</button><span class="note" id="blockMsg"></span></div>
       <div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Since</th></tr></thead><tbody id="teamRows"></tbody></table></div>
       <div class="bar"><button id="impPub">Move the published tracks into the team database</button><span class="note" id="impMsg">Copies the 14, 15 and 17 Nov tracks into the private database, so they can be removed from the public site.</span></div>
     </div>
@@ -1424,6 +1425,10 @@ async function renderTeam(){const c=$('teamCard');if(!(window.IQ&&IQ.role==='adm
   list.forEach(p=>{const tr=document.createElement('tr');tr.innerHTML=`<td></td><td></td><td><select><option>admin</option><option>coach</option><option>rider</option><option>blocked</option></select></td><td>${new Date(p.created_at).toLocaleDateString('en-GB')}</td>`;
     tr.children[0].textContent=p.name||'';tr.children[1].textContent=p.email||'';const sel=tr.querySelector('select');sel.value=p.role;sel.disabled=p.id===IQ.user.id;
     sel.onchange=async()=>{try{await IQ.setRole(p.id,sel.value);}catch(e){alertMsg('Role not changed: '+(e.message||e));sel.value=p.role;}};tb.appendChild(tr);});}
+$('blockAll').onclick=async e=>{const b=e.currentTarget;if(b.dataset.armed!=='1'){b.dataset.armed='1';b.textContent='Tap again to block everyone';setTimeout(()=>{b.dataset.armed='';b.textContent='⛔ Block everyone except me';},4000);return;}
+  b.disabled=true;const list=(await IQ.team()).filter(p=>p.id!==IQ.user.id&&p.role!=='blocked');let n=0,err=0;
+  for(const p of list){try{await IQ.setRole(p.id,'blocked');n++;}catch(_){err++;}}
+  $('blockMsg').textContent=`${n} account${n===1?'':'s'} blocked`+(err?`, ${err} failed`:'')+'. You can re-enable anyone from the Role column.';b.disabled=false;b.dataset.armed='';b.textContent='⛔ Block everyone except me';renderTeam();};
 $('impPub').onclick=async()=>{if(logMode!=='db'){$('impMsg').textContent='Sign in first.';return;}const pub=tracks.filter(t=>t.id.startsWith('pub-'));let n=0,skip=0;
   $('impPub').disabled=true;for(const tr of pub){if(tracks.some(x=>x.shared&&x.day===tr.day&&x.name===tr.name)){skip++;continue;}
     try{await shareTrack(tr);n++;$('impMsg').textContent='Copied '+n+' of '+pub.length+'…';}catch(e){$('impMsg').textContent='Stopped: '+(e.message||e.code||'error');$('impPub').disabled=false;return;}}
