@@ -239,7 +239,7 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div><h3 class="hsec">Events</h3><div class="slist" id="hTeam"></div></div>
       <div><h3 class="hsec">My sessions</h3><div class="slist" id="hMine"></div><div class="tiles" id="hTiles" style="margin-top:12px"></div></div>
     </div>
-    <input type="file" id="hFile" accept=".gpx,.tcx,.xml" multiple hidden>
+    <input type="file" id="hFile" accept=".gpx,.tcx,.xml,.vkx" multiple hidden>
   </section>
   <div id="analysis">
   <div class="bar" id="tabs" role="group" aria-label="Race or session"></div>
@@ -298,8 +298,8 @@ tbody tr.sel{background:color-mix(in srgb,var(--accent) 16%,transparent)}
       <div class="card">
         <h2>Athletes <small id="trkCount"></small></h2>
         <div id="trkList"></div>
-        <div class="drop" id="drop">Drop GPX or TCX files here<br>
-          <label class="btn">Load tracks<input type="file" id="file" accept=".gpx,.tcx,.xml" multiple></label>
+        <div class="drop" id="drop">Drop GPX, TCX or Vakaros VKX files here<br>
+          <label class="btn">Load tracks<input type="file" id="file" accept=".gpx,.tcx,.xml,.vkx" multiple></label>
         </div>
         <div class="note" id="loadMsg"></div>
       </div>
@@ -515,6 +515,18 @@ function posAt(tr,t){const rs=tr.rs,f=(t-rs.t0)/1000,i=Math.floor(f);if(i<0||i>=
 function vAt(tr,t){const i=ri(tr.rs,t);return (i>=0&&i<tr.rs.n&&tr.rs.OK[i])?tr.rs.V[i]:null;}
 
 /* ================= parsing ================= */
+/* Vakaros Atlas .vkx (binary, little endian): fixed-size rows keyed by one byte.
+   0x02 = position/velocity/orientation (t ms U8, lat/lon I4 1e-7 deg, SOG, COG, ...). Logged at up to 25 Hz: kept at 5 Hz. */
+const VKX_SIZE={0xFF:7,0xFE:2,0x01:32,0x02:44,0x03:20,0x04:13,0x05:17,0x06:18,0x07:12,0x08:13,0x0A:16,0x0B:16,0x0C:12,0x0E:16,0x0F:16,0x10:12,0x20:13,0x21:52};
+function parseVKX(buf,fname){const dv=new DataView(buf),n=buf.byteLength,out=[],line={},timer=[];let i=0,last=-1e15;
+  while(i<n){const k=dv.getUint8(i),sz=VKX_SIZE[k];if(sz===undefined||i+1+sz>n)break;const o=i+1;
+    if(k===0x02){const t=Number(dv.getBigUint64(o,true)),lat=dv.getInt32(o+8,true)*1e-7,lon=dv.getInt32(o+12,true)*1e-7;
+      if(t-last>=200&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&(lat||lon)){out.push({lat,lon,t});last=t;}}
+    else if(k===0x04)timer.push({t:Number(dv.getBigUint64(o,true)),ev:dv.getUint8(o+8),v:dv.getInt32(o+9,true)});
+    else if(k===0x05)line[dv.getUint8(o+8)?'boat':'pin']={lat:dv.getFloat32(o+9,true),lon:dv.getFloat32(o+13,true)};
+    i=o+sz;}
+  if(out.length<10)throw new Error('no GPS data in this .vkx file');
+  return {name:fname.replace(/\.vkx$/i,''),pts:out,vkx:{line,timer}};}
 function parseFile(text,fname){
   const doc=new DOMParser().parseFromString(text,'application/xml');
   if(doc.getElementsByTagName('parsererror').length)throw new Error('not a readable XML file');
@@ -1119,7 +1131,7 @@ function renderList(){const L=$('trkList');L.innerHTML='';const list=dayTracks()
   const others=groupsOf(day).filter(g=>g!==curGroup());
   if(others.length){const h=document.createElement('div');h.className='note';h.style.marginTop='6px';h.textContent='Other riders today sailed at another time or place: pick their group at the top.';L.appendChild(h);}
   if(pubLoading&&!list.length)L.innerHTML='<div class="note">Loading the training tracks…</div>';
-  else if(!list.length&&!tracks.some(t=>t.day===day))L.innerHTML='<div class="note">No tracks for this day yet. Load your GPX or TCX file: it is shared with the team and grouped with whoever sailed with you.</div>';}
+  else if(!list.length&&!tracks.some(t=>t.day===day))L.innerHTML='<div class="note">No tracks for this day yet. Load your GPX, TCX or VKX file: it is shared with the team and grouped with whoever sailed with you.</div>';}
 function renderLive(){const t=curT(),r=refRace(),out=[];
   out.push(`<div class="r k"><span></span><span>Athlete</span><span>kn</span><span>TWA</span><span>${geo(r)?(race&&rel<0?'to line':'to mark 1'):''}</span></div>`);
   const vis=visTracks();const LR=ladderOn?ladderRank(t):null;const gapOf=tr=>{if(!LR)return '';const o=LR.list.find(x=>x.tr===tr);return o?`<span class="note" style="margin-left:6px">${o.gap<1?'lead':'−'+Math.round(o.gap)+'m'}</span>`:'';};
@@ -1554,7 +1566,7 @@ let daysDoc=null;
 async function setHidden(tr,on){const list=new Set(dayHide[tr.day]||[]);on?list.add(tr.id):list.delete(tr.id);dayHide[tr.day]=[...list];store.set('dayHide',dayHide);hideVer++;cache.clear();allRender();refit();draw();
   if(logMode==='db'&&canWrite){try{await dbRef.doc('days/'+tr.day).set({hide:dayHide[tr.day]});}catch(e){}}}
 async function loadFiles(files){const msgs=[];let added=0,lastDay=null,sharedN=0;const shareOn=logMode==='db'&&canWrite;
-  for(const f of files){try{const txt=await f.text();const {name,pts}=parseFile(txt,f.name);const tr=addTrack(name,pts,{color:COLORS[tracks.length%COLORS.length]});if(!tr)throw new Error('too few points');
+  for(const f of files){try{const {name,pts}=/\.vkx$/i.test(f.name)?parseVKX(await f.arrayBuffer(),f.name):parseFile(await f.text(),f.name);const tr=addTrack(name,pts,{color:COLORS[tracks.length%COLORS.length]});if(!tr)throw new Error('too few points');
     const ex=tracks.find(t=>sameTrack(t,tr));if(ex){msgs.push(f.name+': already loaded as “'+ex.name+'”');lastDay=tr.day;continue;}
     if(shareOn){try{await shareTrack(tr);sharedN++;lastDay=tr.day;added++;continue;}catch(e){msgs.push(f.name+': not shared ('+((e&&e.code)||'error')+'), kept in this browser');}}
     tracks.push(tr);added++;lastDay=tr.day;}
